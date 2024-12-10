@@ -1,0 +1,1097 @@
+<!DOCTYPE html>
+<html
+  lang="en"
+  style="--bgc: white; --txc: black; --bgcd: black; --txcd: white"
+>
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="description"
+      content="Ryan Geyer is a software engineer based in Metro Detroit."
+    />
+    <meta name="viewport" content="width=device-width" />
+    <link rel="icon" type="image/png" href="/_astro/favicon.CJu_GT_S.png" />
+    <meta name="generator" content="Astro v4.8.2" />
+    <title>Ryan Geyer</title>
+    <!-- OpenGraph -->
+    <meta property="og:url" content="https://geyer.dev/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Ryan Geyer" />
+    <meta
+      property="og:description"
+      content="Ryan Geyer is a software engineer based in Metro Detroit."
+    />
+    <!-- Enable view transitions -->
+    <meta name="astro-view-transitions-enabled" content="true" />
+    <meta name="astro-view-transitions-fallback" content="animate" />
+    <!-- Allow setting the page's text and bg colors by passing props to this Layout component -->
+    <!-- League Spartan font is used for top-level headings on every page -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      rel="preconnect"
+      href="https://fonts.gstatic.com"
+      crossorigin="anonymous"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=League+Spartan:wght@900&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      .astro-route-announcer {
+        left: 0;
+        position: absolute;
+        top: 0;
+        clip: rect(0 0 0 0);
+        clip-path: inset(50%);
+        height: 1px;
+        overflow: hidden;
+        white-space: nowrap;
+        width: 1px;
+      }
+      :root {
+        font-family: Helvetica, Arial, sans-serif;
+        font-weight: 300;
+        scroll-behavior: smooth;
+        --gap-xxs: 0.25rem;
+        --gap-xs: 0.375rem;
+        --gap-sm: 0.5rem;
+        --gap-md: 1rem;
+        --gap-md-2: 1.5rem;
+        --gap-lg: 2rem;
+        --gap-lg-2: 3rem;
+        --gap-xl: 4rem;
+        --gap-xxl: 6rem;
+        --gc-1: #fdd000;
+        --gc-1: oklch(87% 0.2 93);
+        --gc-2: #e100d2;
+        --gc-2: oklch(63% 0.29 332);
+        --gc-3: #1644ff;
+        --gc-3: oklch(51% 0.285 265);
+        --accent-gradient: linear-gradient(
+          42deg,
+          var(--gc-1) 12%,
+          var(--gc-2) 48%,
+          var(--gc-3) 87%
+        );
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        line-height: 1.5;
+        margin-block: 0;
+        margin-inline: auto;
+        max-width: 1200px;
+        min-height: 100vh;
+        min-height: 100lvh;
+        padding: var(--gap-lg) 0;
+        width: 85%;
+      }
+      h1 {
+        font-family: League Spartan, Helvetica, Arial, sans-serif;
+      }
+      p {
+        margin-block: var(--gap-sm);
+      }
+      h1,
+      h2,
+      h3,
+      h4 {
+        line-height: 1.1;
+        margin-block: 0;
+        text-wrap: balance;
+      }
+      ul:where([role="list"]) {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      hr {
+        border-color: currentColor;
+      }
+      a,
+      a:visited {
+        -webkit-text-decoration-skip: ink;
+        color: currentColor;
+        text-decoration-skip-ink: auto;
+      }
+      @keyframes slideFadeUp {
+        0% {
+          opacity: 0;
+          transform: translateY(var(--initial-y));
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      .shadow-1 {
+        border: 1px solid rgba(0, 0, 0, 0.05);
+        box-shadow: 0 2px 6px #00000026;
+        position: relative;
+      }
+      .shadow-2 {
+        border: 1px solid rgba(0, 0, 0, 0.1);
+        box-shadow: 0 4px 12px #0003;
+        position: relative;
+      }
+      @media (prefers-color-scheme: dark) {
+        html:not([data-theme="light"]) .shadow-1 {
+          border-color: #ffffff26;
+          --gradient-color: hsla(0, 0%, 100%, 0.2);
+        }
+        html:not([data-theme="light"]) .shadow-2 {
+          border-color: #fff3;
+          --gradient-color: hsla(0, 0%, 100%, 0.3);
+        }
+        html:not([data-theme="light"]) .shadow-1:before,
+        html:not([data-theme="light"]) .shadow-2:before {
+          background-image: radial-gradient(
+            at center top,
+            var(--gradient-color),
+            hsla(0, 0%, 100%, 0.05)
+          );
+          content: "";
+          inset: 0;
+          pointer-events: none;
+          position: absolute;
+        }
+      }
+      html {
+        background-color: var(--bgc);
+        color: var(--txc);
+      }
+      @media (prefers-color-scheme: dark) {
+        html:not([data-theme="light"]) {
+          background-color: var(--bgcd);
+          color: var(--txcd);
+        }
+      }
+      a[data-astro-cid-hcdulpsm] {
+        left: 50%;
+        opacity: 0;
+        position: absolute;
+        top: var(--gap-sm);
+        transform: translateY(-50%);
+        transition-duration: 0.2s;
+        transition-property: transform, opacity;
+      }
+      a[data-astro-cid-hcdulpsm]:focus-visible {
+        opacity: 1;
+        transform: translateY(0);
+      }
+      @media (prefers-reduced-motion: reduce) {
+        a[data-astro-cid-hcdulpsm] {
+          transition-duration: 0s;
+        }
+      }
+      nav[data-astro-cid-kbegfr6v] {
+        font-weight: 400;
+      }
+      @media screen and (max-width: 750px) {
+        nav[data-astro-cid-kbegfr6v] {
+          font-size: 1.1rem;
+        }
+      }
+      nav[data-astro-cid-kbegfr6v] {
+        align-items: center;
+        display: flex;
+        gap: var(--gap-md);
+      }
+      nav[data-astro-cid-kbegfr6v] > span {
+        align-items: center;
+        display: flex;
+        gap: inherit;
+      }
+      .project-list-item[data-astro-cid-wdncbw6e] {
+        --mouse-x: 0.5;
+        --mouse-y: 0.5;
+        --norm-mouse-x: calc(var(--mouse-x) * 2 - 1);
+        --norm-mouse-y: calc(var(--mouse-y) * 2 - 1);
+      }
+      a[data-astro-cid-wdncbw6e] {
+        text-decoration: none;
+      }
+      hover-video-player[data-astro-cid-wdncbw6e] {
+        aspect-ratio: 16/9;
+        background-color: #d3d3d3;
+        border-radius: 8px;
+        display: block;
+        filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.1));
+        overflow: hidden;
+        position: relative;
+        transition-duration: 0.3s;
+        transition-property: filter, transform;
+        transition-timing-function: ease-out;
+        z-index: 1;
+      }
+      hover-video-player[data-astro-cid-wdncbw6e]
+        [data-astro-cid-wdncbw6e][slot="loading-overlay"] {
+        background-color: #00000080;
+        inset: 0;
+        position: relative;
+      }
+      @keyframes spin {
+        0% {
+          transform: rotate(0);
+        }
+        to {
+          transform: rotate(1turn);
+        }
+      }
+      hover-video-player[data-astro-cid-wdncbw6e]
+        [data-astro-cid-wdncbw6e][slot="loading-overlay"]:after {
+        animation: spin 1s linear infinite;
+        border-color: #fff #fff transparent transparent;
+        border-radius: 50%;
+        border-style: solid;
+        border-width: 0.25rem;
+        content: "";
+        display: block;
+        height: 4rem;
+        inset-block-start: calc(50% - 2rem);
+        inset-inline-start: calc(50% - 2rem);
+        position: absolute;
+        width: 4rem;
+      }
+      hover-video-player[data-astro-cid-wdncbw6e]
+        [data-astro-cid-wdncbw6e][slot="paused-overlay"]
+        .dark {
+        display: none;
+      }
+      @media (prefers-color-scheme: dark) {
+        html:not([data-theme="light"])
+          hover-video-player[data-astro-cid-wdncbw6e]
+          [data-astro-cid-wdncbw6e][slot="paused-overlay"]
+          .dark {
+          display: block;
+        }
+        html:not([data-theme="light"])
+          hover-video-player[data-astro-cid-wdncbw6e]
+          [data-astro-cid-wdncbw6e][slot="paused-overlay"]
+          .light {
+          display: none;
+        }
+      }
+      hover-video-player[data-astro-cid-wdncbw6e][data-is-hovering] {
+        filter: drop-shadow(
+          calc(var(--norm-mouse-x) * -3px) calc(var(--norm-mouse-y) * -3px) 5px
+            rgba(0, 0, 0, 0.2)
+        );
+        transform: scale(1.04)
+          translate(
+            calc(-0.4rem * var(--norm-mouse-x)),
+            calc(-0.5rem - 0.4rem * var(--norm-mouse-y))
+          )
+          perspective(150px) rotateX(calc(var(--norm-mouse-y) * -1deg))
+          rotateY(calc(var(--norm-mouse-x) * 1deg));
+      }
+      hover-video-player[data-astro-cid-wdncbw6e][data-is-hovering]:before {
+        background-image: linear-gradient(90deg, #000, transparent, #fff);
+        content: "";
+        inset: -50%;
+        opacity: calc(
+          var(--norm-mouse-x) * var(--norm-mouse-x) * 0.08 + var(--norm-mouse-y) *
+            var(--norm-mouse-y) * 0.08
+        );
+        position: absolute;
+        transform: rotate(atan2(var(--norm-mouse-y), var(--norm-mouse-x)));
+        z-index: 1;
+      }
+      hover-video-player[data-astro-cid-wdncbw6e] :is(video, img) {
+        display: block;
+        height: 100%;
+        -o-object-fit: cover;
+        object-fit: cover;
+        transition: opacity 0.3s;
+        width: 100%;
+      }
+      hover-video-player[data-astro-cid-wdncbw6e]:not(:defined)
+        :is(video, img) {
+        opacity: 0;
+        visibility: hidden;
+      }
+      h3[data-astro-cid-wdncbw6e] {
+        margin-block: var(--gap-md) var(--gap-sm);
+      }
+      p[data-astro-cid-wdncbw6e] {
+        line-height: 1.2;
+        margin: 0;
+      }
+      nav {
+        justify-content: flex-end;
+      }
+      header {
+        align-items: center;
+        display: flex;
+        height: 85vh;
+        justify-content: center;
+        padding: 10vh 0 15vh;
+        text-align: right;
+      }
+      header .grad-text {
+        animation-duration: 8s;
+      }
+      header h1 {
+        font-size: 7rem;
+        font-weight: 900;
+        margin: 0;
+      }
+      header :is(h1 .word span, p) {
+        opacity: 0;
+        --initial-y: 20%;
+        animation-duration: 0.4s;
+        animation-fill-mode: forwards;
+        animation-name: slideFadeUp;
+        transform: translateY(var(--initial-y));
+      }
+      header h1 .word {
+        display: inline-flex;
+        white-space: nowrap;
+      }
+      header h1 .word span {
+        animation-delay: calc(0.5s + 0.05s * var(--i));
+        display: inline-block;
+      }
+      header p {
+        animation-delay: 1s;
+        font-size: 1.5rem;
+        margin-block-start: var(--gap-sm);
+      }
+      @media (prefers-reduced-motion: reduce), (scripting: none) {
+        header :is(h1 .word span, p) {
+          animation-delay: 0s;
+          animation-duration: 0s;
+        }
+      }
+      @media screen and (max-width: 750px) {
+        header {
+          height: 80vh;
+          text-align: left;
+        }
+        header h1 {
+          line-height: 0.9;
+        }
+      }
+      #projects {
+        padding-top: var(--gap-lg);
+      }
+      #projects ul {
+        display: grid;
+        gap: var(--gap-lg);
+        grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr));
+      }
+      main {
+        margin-block-end: var(--gap-xxl);
+      }
+      a[data-astro-cid-7pnenwoe] {
+        --underline-height: 1px;
+        --transition-duration: 0.2s;
+        align-items: center;
+        display: inline-flex;
+        line-height: 1;
+        text-decoration: none;
+        transition: opacity var(--transition-duration);
+      }
+      a[data-astro-cid-7pnenwoe]:is(:hover, :focus-visible) {
+        opacity: 0.8;
+      }
+      .text[data-astro-cid-7pnenwoe] {
+        position: relative;
+      }
+      .text[data-astro-cid-7pnenwoe]:after {
+        background: currentColor;
+        content: "";
+        display: block;
+        height: var(--underline-height);
+        inset-block-end: -0.15em;
+        inset-inline-start: 0;
+        position: absolute;
+        transform: scaleX(0);
+        transition: transform 0.2s;
+        width: 100%;
+        --start-transform-origin: left;
+        --end-transform-origin: right;
+        transform-origin: var(--end-transform-origin);
+      }
+      .text[data-astro-cid-7pnenwoe]:dir(rtl):after {
+        --start-transform-origin: right;
+        --end-transform-origin: left;
+      }
+      a[data-astro-cid-7pnenwoe]:is(:hover, :focus-visible)
+        .text[data-astro-cid-7pnenwoe]:after {
+        transform: scaleX(1);
+        transform-origin: var(--start-transform-origin);
+      }
+      footer[data-astro-cid-cpgxvzen] {
+        border-block-start: 1px solid currentColor;
+        margin-block-start: var(--gap-xl);
+        padding: var(--gap-lg) 0 var(--gap-sm);
+      }
+      footer[data-astro-cid-cpgxvzen] ul[data-astro-cid-cpgxvzen] {
+        -moz-column-gap: var(--gap-xl);
+        column-gap: var(--gap-xl);
+        display: grid;
+        font-size: 1.1rem;
+        font-weight: 500;
+        grid-template-columns: 1fr auto 1fr;
+        row-gap: var(--gap-sm);
+      }
+      footer[data-astro-cid-cpgxvzen]
+        ul[data-astro-cid-cpgxvzen]
+        > li[data-astro-cid-cpgxvzen]:nth-child(3n + 1) {
+        justify-self: end;
+      }
+      footer[data-astro-cid-cpgxvzen]
+        ul[data-astro-cid-cpgxvzen]
+        > li[data-astro-cid-cpgxvzen]:nth-child(3n + 3) {
+        justify-self: start;
+      }
+      footer[data-astro-cid-cpgxvzen] .copyright[data-astro-cid-cpgxvzen] {
+        margin-block: var(--gap-md-2) 0;
+        text-align: center;
+      }
+      .grad-text {
+        display: inline-block;
+        position: relative;
+      }
+      .grad-text:after {
+        animation: gradientTextRotation 4s linear infinite alternate;
+        background-image: var(--accent-gradient);
+        background-position: 80% 20%;
+        background-size: 300%;
+        content: "";
+        inset: 0;
+        mix-blend-mode: lighten;
+        pointer-events: none;
+        position: absolute;
+      }
+      @media (prefers-color-scheme: dark) {
+        html:not([data-theme="light"]) .grad-text:after {
+          mix-blend-mode: darken;
+        }
+      }
+      @keyframes gradientTextRotation {
+        0% {
+          background-position: 80% 20%;
+        }
+        to {
+          background-position: 20% 80%;
+        }
+      }
+      .grad-text-hover-target .grad-text:after,
+      .grad-text-hover-target.grad-text:after {
+        animation-play-state: paused;
+        opacity: 0;
+        transform: translateY(50%);
+        transition: transform 0.4s, opacity 0.4s;
+      }
+      .grad-text-hover-target.grad-text:is(:hover, :focus-visible):after,
+      .grad-text-hover-target:is(:hover, :focus-visible) .grad-text:after {
+        animation-play-state: running;
+        opacity: 1;
+        transform: translateY(0);
+      }
+      @media (prefers-contrast: more) {
+        .grad-text:after {
+          display: none;
+        }
+      }
+      button[data-astro-cid-po357uz4] {
+        background: none;
+        border: none;
+        color: inherit;
+        cursor: pointer;
+        height: 1.5rem;
+        padding: 0;
+        transform-origin: center;
+        transition-duration: 0.2s;
+        transition-property: opacity, transform;
+        width: 1.5rem;
+      }
+      button[data-astro-cid-po357uz4]:is(:hover, :focus-visible) {
+        opacity: 0.8;
+        transform: scale(1.1);
+      }
+      button[data-astro-cid-po357uz4] svg[data-astro-cid-po357uz4] {
+        display: none;
+        height: 100%;
+        width: 100%;
+      }
+      button[data-astro-cid-po357uz4][aria-checked="false"]
+        svg[data-astro-cid-po357uz4].light,
+      button[data-astro-cid-po357uz4][aria-checked="true"]
+        svg[data-astro-cid-po357uz4].dark {
+        display: block;
+      }
+    </style>
+    <script
+      type="c3b5f6db603d85e9a3c745e3-module"
+      src="/_astro/hoisted.BiC1C9z9.js"
+    ></script>
+  </head>
+  <body style="--bgc: white; --txc: black; --bgcd: black; --txcd: white">
+    <nav data-astro-cid-kbegfr6v>
+      <a href="#main" data-astro-cid-hcdulpsm>Skip to content</a>
+      <a href="#projects" class="astro-7pnenwoe" data-astro-cid-7pnenwoe>
+        <span class="text" data-astro-cid-7pnenwoe>Projects</span>
+      </a>
+      <a href="/about" class="astro-7pnenwoe" data-astro-cid-7pnenwoe>
+        <span class="text" data-astro-cid-7pnenwoe>About</span>
+      </a>
+      <a href="/blog" class="astro-7pnenwoe" data-astro-cid-7pnenwoe>
+        <span class="text" data-astro-cid-7pnenwoe>Blog</span>
+      </a>
+      <button
+        id="theme-toggle"
+        aria-label="Enable dark mode"
+        onclick="if (!window.__cfRLUnblockHandlers) return false; 
+    document.dispatchEvent(new CustomEvent('theme:toggle'))
+    "
+        type="button"
+        role="switch"
+        data-astro-cid-po357uz4
+        data-cf-modified-c3b5f6db603d85e9a3c745e3-=""
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="24"
+          height="24"
+          class="light"
+          data-astro-cid-po357uz4
+        >
+          <use href="/spritesheet.svg#light"></use>
+        </svg>
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="24"
+          height="24"
+          class="dark"
+          data-astro-cid-po357uz4
+        >
+          <use href="/spritesheet.svg#dark"></use>
+        </svg>
+      </button>
+    </nav>
+    <header>
+      <div class="grad-text">
+        <h1>
+          <span class="word">
+            <span style="--i: 0">R</span> <span style="--i: 1">y</span>
+            <span style="--i: 2">a</span> <span style="--i: 3">n</span>
+          </span>
+          <span class="word">
+            <span style="--i: 4">G</span> <span style="--i: 5">e</span>
+            <span style="--i: 6">y</span> <span style="--i: 7">e</span>
+            <span style="--i: 8">r</span>
+          </span>
+        </h1>
+        <p>frontend web developer</p>
+      </div>
+    </header>
+    <main id="main">
+      <section id="projects">
+        <ul role="list">
+          <li
+            data-slug="waymark"
+            class="project-list-item"
+            data-astro-cid-wdncbw6e
+          >
+            <a
+              href="/projects/waymark"
+              class="grad-text-hover-target"
+              data-astro-cid-wdncbw6e
+            >
+              <article data-astro-cid-wdncbw6e>
+                <hover-video-player
+                  sizing-mode="container"
+                  hover-target="li[data-slug=&#34;waymark&#34;] a"
+                  unload-on-pause="true"
+                  data-astro-cid-wdncbw6e
+                >
+                  <video
+                    src="/video/waymark.mp4"
+                    preload="none"
+                    loop
+                    muted
+                    playsinline
+                    data-astro-cid-wdncbw6e
+                  ></video>
+                  <div slot="paused-overlay" data-astro-cid-wdncbw6e>
+                    <picture class="dark">
+                      <source
+                        srcset="
+                          /_astro/waymark-dark.CZmZVsQL_Z1bfEpp.avif  320w,
+                          /_astro/waymark-dark.CZmZVsQL_22aGSi.avif   640w,
+                          /_astro/waymark-dark.CZmZVsQL_ZNINoY.avif  1280w
+                        "
+                        type="image/avif"
+                        sizes="(max-width: 720px) 85vw, (max-width: 1100px) 40vw, 25vw"
+                      />
+                      <source
+                        srcset="
+                          /_astro/waymark-dark.CZmZVsQL_ZuODaW.webp   320w,
+                          /_astro/waymark-dark.CZmZVsQL_Z2mApGb.webp  640w,
+                          /_astro/waymark-dark.CZmZVsQL_Z2gob7A.webp 1280w
+                        "
+                        type="image/webp"
+                        sizes="(max-width: 720px) 85vw, (max-width: 1100px) 40vw, 25vw"
+                      />
+                      <img
+                        src="/_astro/waymark-dark.CZmZVsQL_1D0pWG.png"
+                        srcset="
+                          /_astro/waymark-dark.CZmZVsQL_Zjfhov.png   320w,
+                          /_astro/waymark-dark.CZmZVsQL_Z2b13TJ.png  640w,
+                          /_astro/waymark-dark.CZmZVsQL_1D0pWG.png  1280w
+                        "
+                        alt=""
+                        sizes="(max-width: 720px) 85vw, (max-width: 1100px) 40vw, 25vw"
+                        loading="eager"
+                        decoding="async"
+                        width="1280"
+                        height="720"
+                      />
+                    </picture>
+                    <picture class="light">
+                      <source
+                        srcset="
+                          /_astro/waymark-light.BrnAiDJ9_Z2cpvb7.avif  320w,
+                          /_astro/waymark-light.BrnAiDJ9_110Q7A.avif   640w,
+                          /_astro/waymark-light.BrnAiDJ9_ZnRrRt.avif  1280w
+                        "
+                        type="image/avif"
+                        sizes="(max-width: 720px) 85vw, (max-width: 1100px) 40vw, 25vw"
+                      />
+                      <source
+                        srcset="
+                          /_astro/waymark-light.BrnAiDJ9_ZsXwaB.webp   320w,
+                          /_astro/waymark-light.BrnAiDJ9_Z2kJiFP.webp  640w,
+                          /_astro/waymark-light.BrnAiDJ9_1fPrfA.webp  1280w
+                        "
+                        type="image/webp"
+                        sizes="(max-width: 720px) 85vw, (max-width: 1100px) 40vw, 25vw"
+                      />
+                      <img
+                        src="/_astro/waymark-light.BrnAiDJ9_ZSB7w8.png"
+                        srcset="
+                          /_astro/waymark-light.BrnAiDJ9_Z177DdS.png  320w,
+                          /_astro/waymark-light.BrnAiDJ9_26iI4O.png   640w,
+                          /_astro/waymark-light.BrnAiDJ9_ZSB7w8.png  1280w
+                        "
+                        alt=""
+                        sizes="(max-width: 720px) 85vw, (max-width: 1100px) 40vw, 25vw"
+                        loading="eager"
+                        decoding="async"
+                        width="1280"
+                        height="720"
+                      />
+                    </picture>
+                  </div>
+                  <div
+                    slot="loading-overlay"
+                    role="progressbar"
+                    aria-valuetext="Loading..."
+                    aria-busy="true"
+                    aria-live="polite"
+                    data-astro-cid-wdncbw6e
+                  ></div>
+                </hover-video-player>
+                <h3 class="grad-text" data-astro-cid-wdncbw6e>Waymark</h3>
+                <p data-astro-cid-wdncbw6e>
+                  A video ad creation platform which uses AI to produce
+                  professional-quality video commercials in seconds.
+                </p>
+              </article>
+            </a>
+          </li>
+          <li
+            data-slug="react-hover-video-player"
+            class="project-list-item"
+            data-astro-cid-wdncbw6e
+          >
+            <a
+              href="/projects/react-hover-video-player"
+              class="grad-text-hover-target"
+              data-astro-cid-wdncbw6e
+            >
+              <article data-astro-cid-wdncbw6e>
+                <hover-video-player
+                  sizing-mode="container"
+                  hover-target="li[data-slug=&#34;react-hover-video-player&#34;] a"
+                  unload-on-pause="true"
+                  data-astro-cid-wdncbw6e
+                >
+                  <video
+                    src="/video/react-hover-video-player.mp4"
+                    preload="none"
+                    loop
+                    muted
+                    playsinline
+                    data-astro-cid-wdncbw6e
+                  ></video>
+                  <div slot="paused-overlay" data-astro-cid-wdncbw6e>
+                    <picture>
+                      <source
+                        srcset="
+                          /_astro/react-hover-video-player.BAIoKC4L_88bfc.avif    320w,
+                          /_astro/react-hover-video-player.BAIoKC4L_Z1ICAg2.avif  640w,
+                          /_astro/react-hover-video-player.BAIoKC4L_Kh4u.avif    1280w
+                        "
+                        type="image/avif"
+                        sizes="(max-width: 720px) 85vw, (max-width: 1100px) 40vw, 25vw"
+                      />
+                      <source
+                        srcset="
+                          /_astro/react-hover-video-player.BAIoKC4L_HI7KY.webp    320w,
+                          /_astro/react-hover-video-player.BAIoKC4L_Z192DJf.webp  640w,
+                          /_astro/react-hover-video-player.BAIoKC4L_Z9xXLl.webp  1280w
+                        "
+                        type="image/webp"
+                        sizes="(max-width: 720px) 85vw, (max-width: 1100px) 40vw, 25vw"
+                      />
+                      <img
+                        src="/_astro/react-hover-video-player.BAIoKC4L_Zc0iHL.jpg"
+                        srcset="
+                          /_astro/react-hover-video-player.BAIoKC4L_OSWy1.jpg    320w,
+                          /_astro/react-hover-video-player.BAIoKC4L_Z11QNWd.jpg  640w,
+                          /_astro/react-hover-video-player.BAIoKC4L_Zc0iHL.jpg  1280w
+                        "
+                        alt=""
+                        sizes="(max-width: 720px) 85vw, (max-width: 1100px) 40vw, 25vw"
+                        loading="eager"
+                        decoding="async"
+                        width="1280"
+                        height="720"
+                      />
+                    </picture>
+                  </div>
+                  <div
+                    slot="loading-overlay"
+                    role="progressbar"
+                    aria-valuetext="Loading..."
+                    aria-busy="true"
+                    aria-live="polite"
+                    data-astro-cid-wdncbw6e
+                  ></div>
+                </hover-video-player>
+                <h3 class="grad-text" data-astro-cid-wdncbw6e>
+                  React Hover Video Player
+                </h3>
+                <p data-astro-cid-wdncbw6e>
+                  An open source React component library for rendering videos
+                  that play on hover. The videos on this page are powered by a
+                  web component port of this library!
+                </p>
+              </article>
+            </a>
+          </li>
+          <li
+            data-slug="open-spelling-bee"
+            class="project-list-item"
+            data-astro-cid-wdncbw6e
+          >
+            <a
+              href="/projects/open-spelling-bee"
+              class="grad-text-hover-target"
+              data-astro-cid-wdncbw6e
+            >
+              <article data-astro-cid-wdncbw6e>
+                <hover-video-player
+                  sizing-mode="container"
+                  hover-target="li[data-slug=&#34;open-spelling-bee&#34;] a"
+                  unload-on-pause="true"
+                  data-astro-cid-wdncbw6e
+                >
+                  <video
+                    src="/video/open-spelling-bee.mp4"
+                    preload="none"
+                    loop
+                    muted
+                    playsinline
+                    data-astro-cid-wdncbw6e
+                  ></video>
+                  <div slot="paused-overlay" data-astro-cid-wdncbw6e>
+                    <picture>
+                      <source
+                        srcset="
+                          /_astro/open-spelling-bee.DNk-5rej_ZTbi2t.avif  320w,
+                          /_astro/open-spelling-bee.DNk-5rej_2jf4ge.avif  640w,
+                          /_astro/open-spelling-bee.DNk-5rej_tKktU.avif  1280w
+                        "
+                        type="image/avif"
+                        sizes="(max-width: 720px) 85vw, (max-width: 1100px) 40vw, 25vw"
+                      />
+                      <source
+                        srcset="
+                          /_astro/open-spelling-bee.DNk-5rej_ZJCPn0.webp  320w,
+                          /_astro/open-spelling-bee.DNk-5rej_2sMvUH.webp  640w,
+                          /_astro/open-spelling-bee.DNk-5rej_1OyJhP.webp 1280w
+                        "
+                        type="image/webp"
+                        sizes="(max-width: 720px) 85vw, (max-width: 1100px) 40vw, 25vw"
+                      />
+                      <img
+                        src="/_astro/open-spelling-bee.DNk-5rej_Z9OYaQ.jpg"
+                        srcset="
+                          /_astro/open-spelling-bee.DNk-5rej_1fuAew.jpg  320w,
+                          /_astro/open-spelling-bee.DNk-5rej_ZBgbgH.jpg  640w,
+                          /_astro/open-spelling-bee.DNk-5rej_Z9OYaQ.jpg 1280w
+                        "
+                        alt=""
+                        sizes="(max-width: 720px) 85vw, (max-width: 1100px) 40vw, 25vw"
+                        loading="eager"
+                        decoding="async"
+                        width="1280"
+                        height="720"
+                      />
+                    </picture>
+                  </div>
+                  <div
+                    slot="loading-overlay"
+                    role="progressbar"
+                    aria-valuetext="Loading..."
+                    aria-busy="true"
+                    aria-live="polite"
+                    data-astro-cid-wdncbw6e
+                  ></div>
+                </hover-video-player>
+                <h3 class="grad-text" data-astro-cid-wdncbw6e>
+                  Open Spelling Bee
+                </h3>
+                <p data-astro-cid-wdncbw6e>
+                  An open-source Spelling Bee word game for the web.
+                </p>
+              </article>
+            </a>
+          </li>
+          <li
+            data-slug="jess"
+            class="project-list-item"
+            data-astro-cid-wdncbw6e
+          >
+            <a
+              href="/projects/jess"
+              class="grad-text-hover-target"
+              data-astro-cid-wdncbw6e
+            >
+              <article data-astro-cid-wdncbw6e>
+                <hover-video-player
+                  sizing-mode="container"
+                  hover-target="li[data-slug=&#34;jess&#34;] a"
+                  unload-on-pause="true"
+                  data-astro-cid-wdncbw6e
+                >
+                  <video
+                    src="/video/jess.mp4"
+                    preload="none"
+                    loop
+                    muted
+                    playsinline
+                    data-astro-cid-wdncbw6e
+                  ></video>
+                  <div slot="paused-overlay" data-astro-cid-wdncbw6e>
+                    <picture>
+                      <source
+                        srcset="
+                          /_astro/jess.B5XYKjmP_ZrpqWP.avif   320w,
+                          /_astro/jess.B5XYKjmP_Z2jbdt4.avif  640w,
+                          /_astro/jess.B5XYKjmP_1NP79T.avif  1280w
+                        "
+                        type="image/avif"
+                        sizes="(max-width: 720px) 85vw, (max-width: 1100px) 40vw, 25vw"
+                      />
+                      <source
+                        srcset="
+                          /_astro/jess.B5XYKjmP_1gDikV.webp  320w,
+                          /_astro/jess.B5XYKjmP_ZA7tai.webp  640w,
+                          /_astro/jess.B5XYKjmP_21AnQI.webp 1280w
+                        "
+                        type="image/webp"
+                        sizes="(max-width: 720px) 85vw, (max-width: 1100px) 40vw, 25vw"
+                      />
+                      <img
+                        src="/_astro/jess.B5XYKjmP_Z1eb573.png"
+                        srcset="
+                          /_astro/jess.B5XYKjmP_1qDJ41.png   320w,
+                          /_astro/jess.B5XYKjmP_Zq72rd.png   640w,
+                          /_astro/jess.B5XYKjmP_Z1eb573.png 1280w
+                        "
+                        alt=""
+                        sizes="(max-width: 720px) 85vw, (max-width: 1100px) 40vw, 25vw"
+                        loading="eager"
+                        decoding="async"
+                        width="1280"
+                        height="720"
+                      />
+                    </picture>
+                  </div>
+                  <div
+                    slot="loading-overlay"
+                    role="progressbar"
+                    aria-valuetext="Loading..."
+                    aria-busy="true"
+                    aria-live="polite"
+                    data-astro-cid-wdncbw6e
+                  ></div>
+                </hover-video-player>
+                <h3 class="grad-text" data-astro-cid-wdncbw6e>Jess</h3>
+                <p data-astro-cid-wdncbw6e>
+                  The personal portfolio website for my partner Jess, built with
+                  11ty.
+                </p>
+              </article>
+            </a>
+          </li>
+          <li
+            data-slug="painter"
+            class="project-list-item"
+            data-astro-cid-wdncbw6e
+          >
+            <a
+              href="/projects/painter"
+              class="grad-text-hover-target"
+              data-astro-cid-wdncbw6e
+            >
+              <article data-astro-cid-wdncbw6e>
+                <hover-video-player
+                  sizing-mode="container"
+                  hover-target="li[data-slug=&#34;painter&#34;] a"
+                  unload-on-pause="true"
+                  data-astro-cid-wdncbw6e
+                >
+                  <video
+                    src="/video/painter.mp4"
+                    preload="none"
+                    loop
+                    muted
+                    playsinline
+                    data-astro-cid-wdncbw6e
+                  ></video>
+                  <div slot="paused-overlay" data-astro-cid-wdncbw6e>
+                    <picture>
+                      <source
+                        srcset="
+                          /_astro/painter.CytRuYT5_eEk4S.avif    320w,
+                          /_astro/painter.CytRuYT5_Z1C6rql.avif  640w,
+                          /_astro/painter.CytRuYT5_tmqt5.avif   1280w
+                        "
+                        type="image/avif"
+                        sizes="(max-width: 720px) 85vw, (max-width: 1100px) 40vw, 25vw"
+                      />
+                      <source
+                        srcset="
+                          /_astro/painter.CytRuYT5_rpALH.webp    320w,
+                          /_astro/painter.CytRuYT5_Z1plaIw.webp  640w,
+                          /_astro/painter.CytRuYT5_Z1fLS7L.webp 1280w
+                        "
+                        type="image/webp"
+                        sizes="(max-width: 720px) 85vw, (max-width: 1100px) 40vw, 25vw"
+                      />
+                      <img
+                        src="/_astro/painter.CytRuYT5_Z1noths.jpg"
+                        srcset="
+                          /_astro/painter.CytRuYT5_1gwlXu.jpg   320w,
+                          /_astro/painter.CytRuYT5_ZAepwJ.jpg   640w,
+                          /_astro/painter.CytRuYT5_Z1noths.jpg 1280w
+                        "
+                        alt=""
+                        sizes="(max-width: 720px) 85vw, (max-width: 1100px) 40vw, 25vw"
+                        loading="eager"
+                        decoding="async"
+                        width="1280"
+                        height="720"
+                      />
+                    </picture>
+                  </div>
+                  <div
+                    slot="loading-overlay"
+                    role="progressbar"
+                    aria-valuetext="Loading..."
+                    aria-busy="true"
+                    aria-live="polite"
+                    data-astro-cid-wdncbw6e
+                  ></div>
+                </hover-video-player>
+                <h3 class="grad-text" data-astro-cid-wdncbw6e>Painter</h3>
+                <p data-astro-cid-wdncbw6e>
+                  A procedural painting generator built using PixiJS and WebGL.
+                </p>
+              </article>
+            </a>
+          </li>
+        </ul>
+      </section>
+    </main>
+    <footer data-astro-cid-cpgxvzen>
+      <ul role="list" data-astro-cid-cpgxvzen>
+        <li data-astro-cid-cpgxvzen>
+          <a
+            href="/blog"
+            data-astro-cid-cpgxvzen
+            class="astro-7pnenwoe"
+            data-astro-cid-7pnenwoe
+          >
+            <span class="text" data-astro-cid-7pnenwoe>Blog</span>
+          </a>
+        </li>
+        <li data-astro-cid-cpgxvzen>
+          <a
+            href="https://github.com/Gyanreyer/portfolio"
+            data-astro-cid-cpgxvzen
+            class="astro-7pnenwoe"
+            data-astro-cid-7pnenwoe
+          >
+            <span class="text" data-astro-cid-7pnenwoe>Source</span>
+          </a>
+        </li>
+        <li data-astro-cid-cpgxvzen>
+          <a
+            href="https://resume.geyer.dev"
+            data-astro-cid-cpgxvzen
+            class="astro-7pnenwoe"
+            data-astro-cid-7pnenwoe
+          >
+            <span class="text" data-astro-cid-7pnenwoe>Resume</span>
+          </a>
+        </li>
+        <li data-astro-cid-cpgxvzen>
+          <a
+            href="https://github.com/gyanreyer"
+            data-astro-cid-cpgxvzen
+            class="astro-7pnenwoe"
+            data-astro-cid-7pnenwoe
+          >
+            <span class="text" data-astro-cid-7pnenwoe>GitHub</span>
+          </a>
+        </li>
+        <li data-astro-cid-cpgxvzen>
+          <a
+            href="https://www.linkedin.com/in/gyanreyer/"
+            data-astro-cid-cpgxvzen
+            class="astro-7pnenwoe"
+            data-astro-cid-7pnenwoe
+          >
+            <span class="text" data-astro-cid-7pnenwoe>LinkedIn</span>
+          </a>
+        </li>
+        <li data-astro-cid-cpgxvzen>
+          <a
+            href="https://fosstodon.org/@gyanreyer"
+            rel="me"
+            data-astro-cid-cpgxvzen
+            class="astro-7pnenwoe"
+            data-astro-cid-7pnenwoe
+          >
+            <span class="text" data-astro-cid-7pnenwoe>Mastodon</span>
+          </a>
+        </li>
+      </ul>
+      <p class="copyright" data-astro-cid-cpgxvzen>&copy; 2024 Ryan Geyer</p>
+    </footer>
+    <script
+      src="/cdn-cgi/scripts/7d0fa10a/cloudflare-static/rocket-loader.min.js"
+      data-cf-settings="c3b5f6db603d85e9a3c745e3-|49"
+      defer
+    ></script>
+  </body>
+</html>

@@ -1,0 +1,8 @@
+<ul>
+  <li
+    #for-count:i="6"
+    #if="i % 2 === 0"
+    :style="`--i: ${i}`"
+    #text="`Item ${i}`"
+  ></li>
+</ul>

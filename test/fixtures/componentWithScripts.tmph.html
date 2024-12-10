@@ -1,0 +1,25 @@
+<button>Click me!</button>
+<script #scope:component>
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting) {
+        entry.target.opacity = 1;
+      }
+    });
+  });
+</script>
+<script #scope:instance>
+  this.addEventListener("click", () => console.log("You clicked me!"));
+
+  observer.observe(this);
+</script>
+<script>
+  console.log("This is a global script!");
+</script>
+<script #render #="this is a comment!" #="here are some escaped \"quotes\"">
+  export const num = Math.random();
+  export function render() {
+    return `<button>\`Click me!\`</button>`;
+  }
+</script>
+<script src="./index.js"></script>

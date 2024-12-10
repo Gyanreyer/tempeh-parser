@@ -1,0 +1,20 @@
+<ul>
+  <ListItem #for:item="items" :name="item.name" #text="item.value"></ListItem>
+</ul>
+<!-- This comment should be skipped -->
+<template id="ListItem" #component>
+  <li>
+    <strong #text="`${name}:`"></strong>
+    <slot></slot>
+  </li>
+</template>
+<template id="WhackyComponent" #component>
+  <div>
+    <InnerComponent></InnerComponent>
+    <template id="NestedComponent" #component>
+      <slot name="before"></slot>
+      <div>Why would you do this?!</div>
+      <slot name="after"></slot>
+    </template>
+  </div>
+</template>

@@ -1,0 +1,26 @@
+<main>
+  <h1>Heading</h1>
+  <p>Paragraph</p>
+</main>
+<style>
+  @scope {
+    main {
+      font-size: 1.2em;
+    }
+
+    h1,
+    p {
+      margin: 0;
+    }
+  }
+</style>
+<style #bucket:global>
+  :root {
+    --color: #333;
+  }
+</style>
+<style #raw>
+  main {
+    color: red;
+  }
+</style>

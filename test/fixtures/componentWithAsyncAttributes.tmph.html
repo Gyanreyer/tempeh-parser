@@ -1,0 +1,5 @@
+<p>
+  The temperature in Detroit is <_ #let:forecast="await
+  fetch('https://api.weather.gov/gridpoints/DTX/66,34/forecast').then((res)=>res.json())"
+  #text="forecast.properties.periods[0].temperature" />
+</p>
