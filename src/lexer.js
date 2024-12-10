@@ -1,4 +1,6 @@
 import { open } from "node:fs/promises";
+import { ReadableStream } from "node:stream/web";
+
 import {
   BACK_SLASH,
   FWD_SLASH,

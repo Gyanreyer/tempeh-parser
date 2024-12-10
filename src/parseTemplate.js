@@ -1,3 +1,4 @@
+import { TransformStream } from "node:stream/web";
 import { LexerTokenType, lex } from "./lexer.js";
 
 /**
