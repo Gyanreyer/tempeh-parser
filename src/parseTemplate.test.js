@@ -1,7 +1,7 @@
 import { test, describe } from "node:test";
 import * as assert from "node:assert";
 
-import { parseTemplate } from "./parseTemplate.js";
+import { parseTemplate } from "./index.js";
 
 const FILE_PREFIX_LENGTH = "file://".length;
 
@@ -14,16 +14,14 @@ function resolveRelativePath(path) {
 
 /**
  * @template T
- * @param {ReadableStream<T>} stream
+ * @param {AsyncGenerator<T>} generator
  * @returns {Promise<T[]>}
  */
-const streamToArray = async (stream) => {
+const streamToArray = async (generator) => {
   const arr = [];
 
   // Read until the stream is done
-  for await (const item of stream.values({
-    preventCancel: true,
-  })) {
+  for await (const item of generator) {
     arr.push(item);
   }
   return arr;
@@ -1128,13 +1126,9 @@ describe("parseTemplate", () => {
   test("throws error for a file which does not exist", async () => {
     const templateSourceFilePath = "THIS_DOES_NOT_EXIST.tmph.html";
 
-    const stream = parseTemplate(templateSourceFilePath);
-    const reader = stream.getReader();
-    await assert.rejects(
-      () => reader.read(),
-      new Error(
-        `ENOENT: no such file or directory, open '${templateSourceFilePath}'`
-      )
-    );
+    await assert.rejects(async () => {
+      for await (const token of parseTemplate(templateSourceFilePath)) {
+      }
+    }, new Error(`ENOENT: no such file or directory, open '${templateSourceFilePath}'`));
   });
 });

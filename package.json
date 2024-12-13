@@ -12,5 +12,8 @@
   "devDependencies": {
     "@types/node": "^22.10.1",
     "typescript": "^5.7.2"
+  },
+  "dependencies": {
+    "piscina": "^5.0.0-alpha.0"
   }
 }

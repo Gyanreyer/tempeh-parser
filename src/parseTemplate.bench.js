@@ -1,5 +1,5 @@
 import { readdir, stat } from "node:fs/promises";
-import { parseTemplate } from "./parseTemplate.js";
+import { parseTemplate } from "./index.js";
 import path from "node:path";
 
 const FILE_PREFIX_LENGTH = "file://".length;
@@ -65,15 +65,12 @@ for (const filePath of testFixtureFilePaths) {
   let totalTime = 0;
   for (let i = 0; i < runCount; ++i) {
     const startTime = performance.now();
-    const stream = parseTemplate(filePath);
-    const reader = stream.getReader();
 
-    // Read until the stream is done
-    while (!(await reader.read()).done) {}
+    for await (const token of parseTemplate(filePath)) {
+    }
 
     const parseTemplateEndTime = performance.now();
     totalTime += parseTemplateEndTime - startTime;
-    reader.releaseLock();
   }
 
   const averageTime = totalTime / runCount;
