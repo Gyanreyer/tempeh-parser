@@ -25,7 +25,11 @@ export interface TmphTextNode extends BaseTmphContent {
   textContent: string;
 }
 
-export type TmphNode = TmphElementNode | TmphTextNode;
+export interface TmphDoctypeDeclarationNode extends BaseTmphContent {
+  doctypeDeclaration: string;
+}
+
+export type TmphNode = TmphElementNode | TmphTextNode | TmphDoctypeDeclarationNode;
 
 export interface TemplateDataAST {
   /**

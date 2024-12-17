@@ -1,5 +1,4 @@
 import { open } from "node:fs/promises";
-import { ReadableStream } from "node:stream/web";
 
 import {
   BACK_SLASH,
@@ -20,6 +19,7 @@ import {
   EXCLAMATION_PT,
   HYPHEN,
   EQUALS,
+  doCharCodesMatchDocType,
 } from "./lexerUtils.js";
 
 /**
@@ -37,6 +37,7 @@ export const LexerTokenType = Object.freeze({
   ATTRIBUTE_NAME: 6,
   ATTRIBUTE_VALUE: 7,
   COMMENT: 8,
+  DOCTYPE_DECLARATION: 9,
 });
 
 /**
@@ -49,6 +50,7 @@ export const LexerTokenType = Object.freeze({
  *  | "ATTRIBUTE_NAME"
  *  | "ATTRIBUTE_VALUE"
  *  | "COMMENT"
+ *  | "DOCTYPE_DECLARATION"
  * ]} type
  * @property {string} value
  * @property {number} l - Line number
@@ -512,10 +514,14 @@ export async function* lex(filePath) {
 
 /**
  * @type {LexerStateFunction<
- * "TEXT_CONTENT" | "EOF" | "ERROR",
+ *  | "TEXT_CONTENT"
+ *  | "DOCTYPE_DECLARATION"
+ *  | "EOF"
+ *  | "ERROR",
  *  | typeof lexOpeningTagContents
  *  | typeof lexClosingTagName
  *  | typeof lexCommentTag
+ *  | typeof lexTextContent
  *  >}
  */
 async function* lexTextContent(pullChar, unreadChar) {
@@ -532,6 +538,15 @@ async function* lexTextContent(pullChar, unreadChar) {
    * @type {number[]}
    */
   const textContentCodes = [];
+
+  /**
+   * @type {number|undefined}
+   */
+  let prevLine;
+  /**
+   * @type {number|undefined}
+   */
+  let prevColumn;
 
   while (true) {
     let {
@@ -623,9 +638,36 @@ async function* lexTextContent(pullChar, unreadChar) {
         };
         return lexCommentTag;
       }
+    } else if (isWhitespace(nextCharCode)) {
+      // Test if we're in a <!DOCTYPE declaration
+      if (
+        textContentLength >= 9 &&
+        doCharCodesMatchDocType(textContentCodes.slice(-9))
+      ) {
+        // Shave off the "<!DOCTYPE" part of the string
+        textContentCodes.length -= 9;
+
+        yield {
+          type: LexerTokenType.TEXT_CONTENT,
+          value: String.fromCodePoint(...textContentCodes),
+          l: startLine,
+          c: startColumn,
+        };
+        yield* lexDoctypeDeclaration(
+          pullChar,
+          // Use the previous line and column in case our whitespace
+          // is a line break which could result in an incorrectly
+          // reported line and column number for where the <!DOCTYPE> tag started
+          prevLine ?? 1,
+          (prevColumn ?? 9) - 8
+        );
+        return lexTextContent;
+      }
     }
 
     textContentCodes.push(nextCharCode);
+    prevLine = nextLine;
+    prevColumn = nextCol;
   }
 }
 
@@ -639,7 +681,7 @@ async function lexOpeningTagName(pullChar, unreadChar) {
   /**
    * @type {number[]}
    */
-  let tagnameCodePointString = [];
+  const tagnameCodePointString = [];
 
   /**
    * @type {number|null}
@@ -1290,5 +1332,41 @@ async function* lexRawElementContent(pullChar, unreadChar, elementTagName) {
     }
 
     rawContentCharCodes.push(nextCharCode);
+  }
+}
+
+/**
+ * Lexes a <!DOCTYPE> declaration.
+ *
+ * @param {PullCharFn} pullChar
+ * @param {number} startLine
+ * @param {number} startColumn
+ * @returns {ReturnType<LexerStateFunction<"EOF"|"ERROR"|"DOCTYPE_DECLARATION", null>>}
+ */
+async function* lexDoctypeDeclaration(pullChar, startLine, startColumn) {
+  /**
+   * @type {number[]}
+   */
+  const declarationValuesCodePointString = [];
+
+  while (true) {
+    const { ch: nextCharCode, terminatorToken } = await pullChar();
+
+    if (terminatorToken) {
+      yield terminatorToken;
+      return null;
+    }
+
+    if (nextCharCode === CLOSING_ANGLE_BRACKET) {
+      yield {
+        type: LexerTokenType.DOCTYPE_DECLARATION,
+        value: String.fromCodePoint(...declarationValuesCodePointString).trim(),
+        l: startLine,
+        c: startColumn,
+      };
+      return null;
+    }
+
+    declarationValuesCodePointString.push(nextCharCode);
   }
 }

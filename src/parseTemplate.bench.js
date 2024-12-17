@@ -1,5 +1,5 @@
 import { readdir, stat } from "node:fs/promises";
-import { parseTemplate } from "./index.js";
+import { HTMLParser } from "./index.js";
 import path from "node:path";
 
 const FILE_PREFIX_LENGTH = "file://".length;
@@ -59,6 +59,8 @@ const testFixtureFilePaths = await readdir(fixturesDirPath).then((fileNames) =>
 let averageTimings = 0;
 let averageTimesPerKB = 0;
 
+const parser = new HTMLParser();
+
 for (const filePath of testFixtureFilePaths) {
   const fileSize = (await stat(filePath)).size / 1024;
   const runCount = Math.round(5 + Math.random() * 10);
@@ -66,7 +68,7 @@ for (const filePath of testFixtureFilePaths) {
   for (let i = 0; i < runCount; ++i) {
     const startTime = performance.now();
 
-    for await (const token of parseTemplate(filePath)) {
+    for await (const token of parser.parseIterable(filePath)) {
     }
 
     const parseTemplateEndTime = performance.now();

@@ -223,3 +223,30 @@ export const isLegalUnquotedAttributeValueChar = (charCode) =>
   );
 
 export const EXCLAMATION_PT = 33;
+
+const UPPER_D = 68;
+const UPPER_O = 79;
+const UPPER_C = 67;
+const UPPER_T = 84;
+const UPPER_Y = 89;
+const UPPER_P = 80;
+const UPPER_E = 69;
+
+/**
+ *
+ * @param {number[]} charCodeSet
+ * @returns {boolean}
+ */
+export const doCharCodesMatchDocType = (charCodeSet) => {
+  return (
+    charCodeSet[0] === OPENING_ANGLE_BRACKET &&
+    charCodeSet[1] === EXCLAMATION_PT &&
+    charCodeSet[2] === UPPER_D &&
+    charCodeSet[3] === UPPER_O &&
+    charCodeSet[4] === UPPER_C &&
+    charCodeSet[5] === UPPER_T &&
+    charCodeSet[6] === UPPER_Y &&
+    charCodeSet[7] === UPPER_P &&
+    charCodeSet[8] === UPPER_E
+  );
+};

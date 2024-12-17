@@ -1,7 +1,7 @@
 import { LexerTokenType, lex } from "./lexer.js";
 
 /**
- * @import { TmphElementNode, TmphTextNode, TmphNode } from "./templateData.js";
+ * @import { TmphElementNode, TmphTextNode, TmphDoctypeDeclarationNode, TmphNode } from "./templateData.js";
  */
 
 /**
@@ -161,7 +161,7 @@ export default async function parseTemplate({ filePath, messagePort }) {
           break;
         }
         case LexerTokenType.CLOSING_TAGNAME: {
-          const closedTagname = token.value;
+          let closedTagname = token.value;
 
           if (!currentOpenLeafElementNode) {
             messagePort.postMessage(
@@ -199,6 +199,15 @@ export default async function parseTemplate({ filePath, messagePort }) {
 
           nodeParentMap.delete(closedNode);
           break;
+        }
+        case LexerTokenType.DOCTYPE_DECLARATION: {
+          messagePort.postMessage(
+            /** @satisfies {TmphDoctypeDeclarationNode} */ ({
+              doctypeDeclaration: token.value,
+              l: token.l,
+              c: token.c,
+            })
+          );
         }
       }
     }

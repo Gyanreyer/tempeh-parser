@@ -1,7 +1,7 @@
 import { test, describe } from "node:test";
 import * as assert from "node:assert";
 
-import { parseTemplate } from "./index.js";
+import { HTMLParser } from "./index.js";
 
 const FILE_PREFIX_LENGTH = "file://".length;
 
@@ -13,21 +13,6 @@ function resolveRelativePath(path) {
 }
 
 /**
- * @template T
- * @param {AsyncGenerator<T>} generator
- * @returns {Promise<T[]>}
- */
-const streamToArray = async (generator) => {
-  const arr = [];
-
-  // Read until the stream is done
-  for await (const item of generator) {
-    arr.push(item);
-  }
-  return arr;
-};
-
-/**
  * @import { TmphNode } from './templateData';
  */
 
@@ -37,8 +22,8 @@ describe("parseTemplate", () => {
       "../test/fixtures/simpleComponent.tmph.html"
     );
 
-    const parsedTemplateNodes = await streamToArray(
-      parseTemplate(templateSourceFilePath)
+    const parsedTemplateNodes = await new HTMLParser().parse(
+      templateSourceFilePath
     );
 
     assert.deepStrictEqual(
@@ -255,8 +240,8 @@ describe("parseTemplate", () => {
     const templateSourceFilePath = resolveRelativePath(
       "../test/fixtures/inlineSubComponents.tmph.html"
     );
-    const parsedTemplateNodes = await streamToArray(
-      parseTemplate(templateSourceFilePath)
+    const parsedTemplateNodes = await new HTMLParser().parse(
+      templateSourceFilePath
     );
 
     assert.deepStrictEqual(
@@ -536,8 +521,8 @@ describe("parseTemplate", () => {
       "../test/fixtures/componentWithStyles.tmph.html"
     );
 
-    const parsedTemplateNodes = await streamToArray(
-      parseTemplate(templateSourceFilePath)
+    const parsedTemplateNodes = await new HTMLParser().parse(
+      templateSourceFilePath
     );
 
     assert.deepStrictEqual(
@@ -670,8 +655,8 @@ describe("parseTemplate", () => {
     const templateSourceFilePath = resolveRelativePath(
       "../test/fixtures/componentWithScripts.tmph.html"
     );
-    const parsedTemplateNodes = await streamToArray(
-      parseTemplate(templateSourceFilePath)
+    const parsedTemplateNodes = await new HTMLParser().parse(
+      templateSourceFilePath
     );
 
     assert.deepStrictEqual(
@@ -827,16 +812,21 @@ describe("parseTemplate", () => {
     const templateSourceFilePath = resolveRelativePath(
       "../test/fixtures/layout.tmph.html"
     );
-    const parsedTemplateNodes = await streamToArray(
-      parseTemplate(templateSourceFilePath)
+    const parsedTemplateNodes = await new HTMLParser().parse(
+      templateSourceFilePath
     );
 
     assert.deepStrictEqual(
       parsedTemplateNodes,
       /** @satisfies {TmphNode[]} */ ([
         {
-          textContent: "<!DOCTYPE html>\n",
+          doctypeDeclaration: "html",
           l: 1,
+          c: 1,
+        },
+        {
+          textContent: "\n",
+          l: 2,
           c: 1,
         },
         {
@@ -958,8 +948,8 @@ describe("parseTemplate", () => {
     const templateSourceFilePath = resolveRelativePath(
       "../test/fixtures/unicode.tmph.html"
     );
-    const parsedTemplateNodes = await streamToArray(
-      parseTemplate(templateSourceFilePath)
+    const parsedTemplateNodes = await new HTMLParser().parse(
+      templateSourceFilePath
     );
 
     assert.deepStrictEqual(
@@ -1011,8 +1001,8 @@ describe("parseTemplate", () => {
     const templateSourceFilePath = resolveRelativePath(
       "../test/fixtures/incompleteElement.tmph.html"
     );
-    const parsedTemplateNodes = await streamToArray(
-      parseTemplate(templateSourceFilePath)
+    const parsedTemplateNodes = await new HTMLParser().parse(
+      templateSourceFilePath
     );
 
     assert.deepStrictEqual(
@@ -1031,8 +1021,8 @@ describe("parseTemplate", () => {
     const templateSourceFilePath = resolveRelativePath(
       "../test/fixtures/utf8-bom.tmph.html"
     );
-    const parsedTemplateNodes = await streamToArray(
-      parseTemplate(templateSourceFilePath)
+    const parsedTemplateNodes = await new HTMLParser().parse(
+      templateSourceFilePath
     );
 
     assert.deepStrictEqual(
@@ -1063,8 +1053,8 @@ describe("parseTemplate", () => {
     const templateSourceFilePath = resolveRelativePath(
       "../test/fixtures/utf16-le.tmph.html"
     );
-    const parsedTemplateNodes = await streamToArray(
-      parseTemplate(templateSourceFilePath)
+    const parsedTemplateNodes = await new HTMLParser().parse(
+      templateSourceFilePath
     );
 
     assert.deepStrictEqual(
@@ -1095,8 +1085,8 @@ describe("parseTemplate", () => {
     const templateSourceFilePath = resolveRelativePath(
       "../test/fixtures/utf16-be.tmph.html"
     );
-    const parsedTemplateNodes = await streamToArray(
-      parseTemplate(templateSourceFilePath)
+    const parsedTemplateNodes = await new HTMLParser().parse(
+      templateSourceFilePath
     );
 
     assert.deepStrictEqual(
@@ -1126,9 +1116,13 @@ describe("parseTemplate", () => {
   test("throws error for a file which does not exist", async () => {
     const templateSourceFilePath = "THIS_DOES_NOT_EXIST.tmph.html";
 
-    await assert.rejects(async () => {
-      for await (const token of parseTemplate(templateSourceFilePath)) {
-      }
-    }, new Error(`ENOENT: no such file or directory, open '${templateSourceFilePath}'`));
+    const parser = new HTMLParser();
+
+    await assert.rejects(
+      () => parser.parse(templateSourceFilePath),
+      new Error(
+        `ENOENT: no such file or directory, open '${templateSourceFilePath}'`
+      )
+    );
   });
 });
