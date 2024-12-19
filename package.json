@@ -1,11 +1,13 @@
 {
-  "name": "@tempeh/html-parser",
-  "version": "0.0.0",
+  "name": "tempeh-html-parser",
+  "version": "0.0.0-alpha.1",
   "description": "A fast streaming HTML parser.",
   "type": "module",
-  "main": "index.js",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc -b",
+    "test": "node --test"
   },
   "author": "Ryan Geyer",
   "license": "ISC",

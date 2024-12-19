@@ -8,6 +8,10 @@
     "moduleResolution": "node",
     "esModuleInterop": true,
     "baseUrl": "./",
-    "noEmit": true
-  }
+    "declaration": true,
+    "outDir": "./dist",
+    "skipLibCheck": true,
+    "declarationMap": true
+  },
+  "include": ["src/**/*"]
 }

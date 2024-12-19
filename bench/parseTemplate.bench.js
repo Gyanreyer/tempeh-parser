@@ -1,5 +1,5 @@
 import { readdir, stat } from "node:fs/promises";
-import { HTMLParser } from "./index.js";
+import { HTMLParser } from "../src/index.js";
 import path from "node:path";
 
 const FILE_PREFIX_LENGTH = "file://".length;
