@@ -68,7 +68,7 @@ for (const filePath of testFixtureFilePaths) {
   for (let i = 0; i < runCount; ++i) {
     const startTime = performance.now();
 
-    for await (const token of parser.parseIterable(filePath)) {
+    for await (const token of parser.parseFile(filePath)) {
     }
 
     const parseTemplateEndTime = performance.now();

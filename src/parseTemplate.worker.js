@@ -1,7 +1,7 @@
 import { LexerTokenType, lex } from "./lexer.js";
 
 /**
- * @import { TmphElementNode, TmphTextNode, TmphDoctypeDeclarationNode, TmphNode } from "./templateData.js";
+ * @import { TmphElementNode, TmphTextNode, TmphDoctypeDeclarationNode, TmphNode } from "./types.js";
  */
 
 /**

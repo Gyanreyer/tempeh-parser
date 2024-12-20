@@ -8,16 +8,16 @@ const fixturesDirPath = import.meta
   .slice("file://".length);
 
 /**
- * @import { TmphNode } from '../src/templateData.js';
+ * @import { TmphNode } from '../src/types.js';
  */
 
 describe("HTMLParser.parse", () => {
   test("should parse a simple component file as expected", async () => {
     const templateSourceFilePath = `${fixturesDirPath}simpleComponent.tmph.html`;
 
-    const parsedTemplateNodes = await new HTMLParser().parse(
-      templateSourceFilePath
-    );
+    const parsedTemplateNodes = await new HTMLParser()
+      .parseFile(templateSourceFilePath)
+      .toArray();
 
     assert.deepStrictEqual(
       parsedTemplateNodes,
@@ -231,9 +231,9 @@ describe("HTMLParser.parse", () => {
 
   test("should parse a component file with inline sub-components", async () => {
     const templateSourceFilePath = `${fixturesDirPath}inlineSubComponents.tmph.html`;
-    const parsedTemplateNodes = await new HTMLParser().parse(
-      templateSourceFilePath
-    );
+    const parsedTemplateNodes = await new HTMLParser()
+      .parseFile(templateSourceFilePath)
+      .toArray();
 
     assert.deepStrictEqual(
       parsedTemplateNodes,
@@ -510,9 +510,9 @@ describe("HTMLParser.parse", () => {
   test("should parse a component file with styles", async () => {
     const templateSourceFilePath = `${fixturesDirPath}componentWithStyles.tmph.html`;
 
-    const parsedTemplateNodes = await new HTMLParser().parse(
-      templateSourceFilePath
-    );
+    const parsedTemplateNodes = await new HTMLParser()
+      .parseFile(templateSourceFilePath)
+      .toArray();
 
     assert.deepStrictEqual(
       parsedTemplateNodes,
@@ -642,9 +642,9 @@ describe("HTMLParser.parse", () => {
 
   test("should parse a component file with scripts", async () => {
     const templateSourceFilePath = `${fixturesDirPath}componentWithScripts.tmph.html`;
-    const parsedTemplateNodes = await new HTMLParser().parse(
-      templateSourceFilePath
-    );
+    const parsedTemplateNodes = await new HTMLParser()
+      .parseFile(templateSourceFilePath)
+      .toArray();
 
     assert.deepStrictEqual(
       parsedTemplateNodes,
@@ -797,9 +797,9 @@ describe("HTMLParser.parse", () => {
 
   test("should parse a layout component file", async () => {
     const templateSourceFilePath = `${fixturesDirPath}layout.tmph.html`;
-    const parsedTemplateNodes = await new HTMLParser().parse(
-      templateSourceFilePath
-    );
+    const parsedTemplateNodes = await new HTMLParser()
+      .parseFile(templateSourceFilePath)
+      .toArray();
 
     assert.deepStrictEqual(
       parsedTemplateNodes,
@@ -931,9 +931,9 @@ describe("HTMLParser.parse", () => {
 
   test("should parse a component file containing multi-byte unicode characters", async () => {
     const templateSourceFilePath = `${fixturesDirPath}unicode.tmph.html`;
-    const parsedTemplateNodes = await new HTMLParser().parse(
-      templateSourceFilePath
-    );
+    const parsedTemplateNodes = await new HTMLParser()
+      .parseFile(templateSourceFilePath)
+      .toArray();
 
     assert.deepStrictEqual(
       parsedTemplateNodes,
@@ -982,9 +982,9 @@ describe("HTMLParser.parse", () => {
 
   test("should ignore un-terminated opening tags", async () => {
     const templateSourceFilePath = `${fixturesDirPath}incompleteElement.tmph.html`;
-    const parsedTemplateNodes = await new HTMLParser().parse(
-      templateSourceFilePath
-    );
+    const parsedTemplateNodes = await new HTMLParser()
+      .parseFile(templateSourceFilePath)
+      .toArray();
 
     assert.deepStrictEqual(
       parsedTemplateNodes,
@@ -1000,9 +1000,9 @@ describe("HTMLParser.parse", () => {
 
   test("should parse a utf-8 file with a byte order marker", async () => {
     const templateSourceFilePath = `${fixturesDirPath}utf8-bom.tmph.html`;
-    const parsedTemplateNodes = await new HTMLParser().parse(
-      templateSourceFilePath
-    );
+    const parsedTemplateNodes = await new HTMLParser()
+      .parseFile(templateSourceFilePath)
+      .toArray();
 
     assert.deepStrictEqual(
       parsedTemplateNodes,
@@ -1030,9 +1030,9 @@ describe("HTMLParser.parse", () => {
 
   test("should parse a utf-16 (little endian) file", async () => {
     const templateSourceFilePath = `${fixturesDirPath}utf16-le.tmph.html`;
-    const parsedTemplateNodes = await new HTMLParser().parse(
-      templateSourceFilePath
-    );
+    const parsedTemplateNodes = await new HTMLParser()
+      .parseFile(templateSourceFilePath)
+      .toArray();
 
     assert.deepStrictEqual(
       parsedTemplateNodes,
@@ -1060,9 +1060,9 @@ describe("HTMLParser.parse", () => {
 
   test("should parse a utf-16 (big endian) file", async () => {
     const templateSourceFilePath = `${fixturesDirPath}utf16-be.tmph.html`;
-    const parsedTemplateNodes = await new HTMLParser().parse(
-      templateSourceFilePath
-    );
+    const parsedTemplateNodes = await new HTMLParser()
+      .parseFile(templateSourceFilePath)
+      .toArray();
 
     assert.deepStrictEqual(
       parsedTemplateNodes,
@@ -1094,7 +1094,7 @@ describe("HTMLParser.parse", () => {
     const parser = new HTMLParser();
 
     await assert.rejects(
-      () => parser.parse(templateSourceFilePath),
+      () => parser.parseFile(templateSourceFilePath).toArray(),
       new Error(
         `ENOENT: no such file or directory, open '${templateSourceFilePath}'`
       )

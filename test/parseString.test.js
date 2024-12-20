@@ -4,14 +4,14 @@ import * as assert from "node:assert";
 import { HTMLParser } from "../src/index.js";
 
 /**
- * @import { TmphNode } from '../src/templateData';
+ * @import { TmphNode } from '../src/types.js';
  */
 
 describe("HTMLParser.parseString", () => {
   test("should parse a simple HTML string as expected", async () => {
     const htmlParser = new HTMLParser();
     const htmlString = "<div>Hello, world!</div>";
-    const nodes = await htmlParser.parseString(htmlString);
+    const nodes = await htmlParser.parseString(htmlString).toArray();
     assert.deepStrictEqual(
       nodes,
       /** @satisfies {TmphNode[]} */ ([
@@ -97,7 +97,7 @@ describe("HTMLParser.parseString", () => {
       },
     ];
 
-    for await (const node of htmlParser.parseStringIterable(htmlString)) {
+    for await (const node of htmlParser.parseString(htmlString)) {
       assert.deepStrictEqual(node, expectedNodes[nodeIndex++]);
     }
   });
