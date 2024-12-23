@@ -31,7 +31,7 @@ describe("HTMLParser.parseString", () => {
     );
   });
 
-  test("parseStringIterable should parse an HTML string as expected", async () => {
+  test("should parse a more complex HTML string with child elements", async () => {
     const htmlParser = new HTMLParser();
     const htmlString = /* html */ `<div>
   Hello, world!

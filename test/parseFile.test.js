@@ -11,7 +11,7 @@ const fixturesDirPath = import.meta
  * @import { TmphNode } from '../src/types.js';
  */
 
-describe("HTMLParser.parse", () => {
+describe("HTMLParser.parseFile", () => {
   test("should parse a simple component file as expected", async () => {
     const templateSourceFilePath = `${fixturesDirPath}simpleComponent.tmph.html`;
 

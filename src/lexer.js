@@ -1,4 +1,5 @@
 import { open } from "node:fs/promises";
+import { TransformStream } from "node:stream/web";
 
 import {
   BACK_SLASH,
@@ -21,6 +22,11 @@ import {
   EQUALS,
   doCharCodesMatchDocType,
 } from "./lexerUtils.js";
+
+/**
+ * @import { WritableStreamDefaultWriter } from 'node:stream/web';
+ * @import { FileHandle } from 'node:fs/promises';
+ */
 
 /**
  * Enum for lexer token types.
@@ -92,415 +98,434 @@ export const LexerTokenType = Object.freeze({
 const BUFFER_CHUNK_SIZE = 256;
 
 /**
- * @param {string} filePath
+ * @param {{
+ *  filePath: string;
+ * } | {
+ *  rawHTMLString: string;
+ * }} options
  */
-export async function* lex(filePath) {
+export function lex(options) {
   /**
-   * @type {import("node:fs/promises").FileHandle | null}
+   * @type {TransformStream<LexerToken, LexerToken>}
    */
-  let fileHandle = null;
+  const transformStream = new TransformStream();
 
-  let hasUnreadLastChar = false;
-  /**
-   * @type {number | null}
-   */
-  let lastReadCharCode = null;
+  // IIFE drives the lexer state machine and writes to the transform stream
+  // until the input is exhausted or an error occurs.
+  (async () => {
+    const streamWriter = transformStream.writable.getWriter();
 
-  let line = 1;
-  let lastReadCharLine = 1;
+    /**
+     * @type {FileHandle | null}
+     */
+    let fileHandle = null;
 
-  let column = 0;
-  let lastReadCharColumn = 0;
+    let hasUnreadLastChar = false;
+    /**
+     * @type {number | null}
+     */
+    let lastReadCharCode = null;
 
-  // We'll swap between these two buffers as we read chunks of the file
-  // so we can always be speculatively reading the next chunk while we're
-  // processing the current one.
-  const charChunkBufferView = new DataView(new ArrayBuffer(BUFFER_CHUNK_SIZE));
+    let line = 1;
+    let lastReadCharLine = 1;
 
-  let readableByteCount = 0;
+    let column = 0;
+    let lastReadCharColumn = 0;
 
-  let nextReadOffset = 0;
+    /**
+     * @type {DataView}
+     */
+    let charChunkBufferView;
 
-  /**
-   * @type {8 | 16 | 32}
-   */
-  let charByteSize = 8;
-  let readOffsetIncrement = 1;
-
-  /**
-   * @param {number} readOffset
-   */
-  let readBufferedCharBytes = (readOffset) =>
-    charChunkBufferView.getUint8(readOffset);
-
-  /**
-   * @returns {Promise<number | null | Error>} Returns the next character code point or null if EOF
-   */
-  const readNextChar = async () => {
-    if (!fileHandle) {
-      return null;
-    }
-
-    if (nextReadOffset < readableByteCount) {
-      const readOffset = nextReadOffset;
-      nextReadOffset += readOffsetIncrement;
-
-      return readBufferedCharBytes(readOffset) || null;
-    }
-
-    try {
-      const readResult = await fileHandle.read(charChunkBufferView);
-      readableByteCount = readResult.bytesRead;
-    } catch (err) {
-      if (err instanceof Error) {
-        return err;
-      } else {
-        return new Error(String(err));
-      }
-    }
-
-    if (readableByteCount === 0) {
-      return null;
-    }
-
-    nextReadOffset = 0;
-    return readNextChar();
-  };
-
-  /**
-   * @type {PullCharFn}
-   */
-  const pullChar = async () => {
     /**
      * @type {number}
      */
-    let pulledCodePoint;
+    let readableByteCount;
 
-    if (hasUnreadLastChar && lastReadCharCode !== null) {
-      // If we unread the last character, we'll just re-use it instead of reading a new one.
-      hasUnreadLastChar = false;
-      pulledCodePoint = lastReadCharCode;
+    if ("rawHTMLString" in options) {
+      const utf8Encoder = new TextEncoder();
+      const utf8Bytes = utf8Encoder.encode(options.rawHTMLString);
+      charChunkBufferView = new DataView(utf8Bytes.buffer);
+      readableByteCount = utf8Bytes.byteLength;
     } else {
-      const leadingCharByte = await readNextChar();
-      if (leadingCharByte === null) {
-        return {
-          ch: -1,
-          l: line,
-          c: column,
-          terminatorToken: {
-            type: LexerTokenType.EOF,
-            l: line,
-            c: column,
-          },
-        };
-      } else if (leadingCharByte instanceof Error) {
-        return {
-          ch: -1,
-          l: line,
-          c: column,
-          terminatorToken: {
-            type: LexerTokenType.ERROR,
-            value: leadingCharByte.message,
-            l: line,
-            c: column,
-          },
-        };
+      charChunkBufferView = new DataView(new ArrayBuffer(BUFFER_CHUNK_SIZE));
+      readableByteCount = 0;
+    }
+
+    let nextReadOffset = 0;
+
+    /**
+     * @type {8 | 16 | 32}
+     */
+    let charByteSize = 8;
+    let readOffsetIncrement = 1;
+
+    /**
+     * @param {number} readOffset
+     */
+    let readBufferedCharBytes = (readOffset) =>
+      charChunkBufferView.getUint8(readOffset);
+
+    /**
+     * @returns {Promise<number | null | Error>} Returns the next character code point or null if EOF
+     */
+    const readNextChar = async () => {
+      if (nextReadOffset < readableByteCount) {
+        const readOffset = nextReadOffset;
+        nextReadOffset += readOffsetIncrement;
+
+        return readBufferedCharBytes(readOffset) || null;
       }
 
-      if (charByteSize === 8) {
-        // For utf-8, we need to perform special handling for multi-byte sequences
-        if (leadingCharByte < 0x80) {
-          // Single-byte characters are < 0x80
-          pulledCodePoint = leadingCharByte;
-        } else if (leadingCharByte >= 0xc0 && leadingCharByte <= 0xdf) {
-          // 2-byte sequence
-          const nextByte = await readNextChar();
-          if (!nextByte) {
-            return {
-              ch: -1,
-              l: line,
-              c: column,
-              terminatorToken: {
-                type: LexerTokenType.EOF,
-                l: line,
-                c: column,
-              },
-            };
-          } else if (nextByte instanceof Error) {
-            return {
-              ch: -1,
-              l: line,
-              c: column,
-              terminatorToken: {
-                type: LexerTokenType.ERROR,
-                value: `An error occurred reading byte-order-marker bytes: ${nextByte.message}`,
-                l: line,
-                c: column,
-              },
-            };
-          }
+      if (!fileHandle) {
+        return null;
+      }
 
-          pulledCodePoint = ((leadingCharByte & 0x1f) << 6) | (nextByte & 0x3f);
-        } else if (leadingCharByte >= 0xe0 && leadingCharByte <= 0xef) {
-          // 3-byte sequence
-          const byte2 = await readNextChar();
-          const byte3 = await readNextChar();
-
-          if (!byte2 || !byte3) {
-            return {
-              ch: -1,
-              l: line,
-              c: column,
-              terminatorToken: {
-                type: LexerTokenType.EOF,
-                l: line,
-                c: column,
-              },
-            };
-          } else if (byte2 instanceof Error || byte3 instanceof Error) {
-            let errorMessage =
-              "An error occurred reading byte-order-marker bytes:";
-            if (byte3 instanceof Error) {
-              errorMessage = `${errorMessage} ${byte3.message}`;
-            } else if (byte2 instanceof Error) {
-              errorMessage = `${errorMessage} ${byte2.message}`;
-            } else {
-              errorMessage = `${errorMessage} Unknown error reading next byte`;
-            }
-
-            return {
-              ch: -1,
-              l: line,
-              c: column,
-              terminatorToken: {
-                type: LexerTokenType.ERROR,
-                value:
-                  byte2 instanceof Error
-                    ? byte2.message
-                    : byte3 instanceof Error
-                    ? byte3.message
-                    : "Unknown error reading next byte",
-                l: line,
-                c: column,
-              },
-            };
-          }
-
-          pulledCodePoint =
-            ((leadingCharByte & 0x0f) << 12) |
-            ((byte2 & 0x3f) << 6) |
-            (byte3 & 0x3f);
-        } else if (leadingCharByte >= 0xf0 && leadingCharByte <= 0xf7) {
-          // 4-byte sequence
-          const byte2 = await readNextChar();
-          const byte3 = await readNextChar();
-          const byte4 = await readNextChar();
-          if (!byte2 || !byte3 || !byte4) {
-            return {
-              ch: -1,
-              l: line,
-              c: column,
-              terminatorToken: {
-                type: LexerTokenType.EOF,
-                l: line,
-                c: column,
-              },
-            };
-          } else if (
-            byte2 instanceof Error ||
-            byte3 instanceof Error ||
-            byte4 instanceof Error
-          ) {
-            let errorMessage =
-              "An error occurred reading byte-order-marker bytes:";
-            if (byte4 instanceof Error) {
-              errorMessage = `${errorMessage} ${byte4.message}`;
-            } else if (byte3 instanceof Error) {
-              errorMessage = `${errorMessage} ${byte3.message}`;
-            } else if (byte2 instanceof Error) {
-              errorMessage = `${errorMessage} ${byte2.message}`;
-            } else {
-              errorMessage = `${errorMessage} Unknown error reading next byte`;
-            }
-
-            return {
-              ch: -1,
-              l: line,
-              c: column,
-              terminatorToken: {
-                type: LexerTokenType.ERROR,
-                value: errorMessage,
-                l: line,
-                c: column,
-              },
-            };
-          }
-          pulledCodePoint =
-            ((leadingCharByte & 0x07) << 18) |
-            ((byte2 & 0x3f) << 12) |
-            ((byte3 & 0x3f) << 6) |
-            (byte4 & 0x3f);
+      try {
+        const readResult = await fileHandle.read(charChunkBufferView);
+        readableByteCount = readResult.bytesRead;
+      } catch (err) {
+        if (err instanceof Error) {
+          return err;
         } else {
+          return new Error(String(err));
+        }
+      }
+
+      if (readableByteCount === 0) {
+        return null;
+      }
+
+      nextReadOffset = 0;
+      return readNextChar();
+    };
+
+    /**
+     * @type {PullCharFn}
+     */
+    const pullChar = async () => {
+      /**
+       * @type {number}
+       */
+      let pulledCodePoint;
+
+      if (hasUnreadLastChar && lastReadCharCode !== null) {
+        // If we unread the last character, we'll just re-use it instead of reading a new one.
+        hasUnreadLastChar = false;
+        pulledCodePoint = lastReadCharCode;
+      } else {
+        const leadingCharByte = await readNextChar();
+        if (leadingCharByte === null) {
+          return {
+            ch: -1,
+            l: line,
+            c: column,
+            terminatorToken: {
+              type: LexerTokenType.EOF,
+              l: line,
+              c: column,
+            },
+          };
+        } else if (leadingCharByte instanceof Error) {
           return {
             ch: -1,
             l: line,
             c: column,
             terminatorToken: {
               type: LexerTokenType.ERROR,
-              value: `Invalid UTF-8 leading byte: ${leadingCharByte}`,
+              value: leadingCharByte.message,
               l: line,
               c: column,
             },
           };
         }
-      } else {
-        // utf-16 also uses variable-width encoding, but it will just work itself out
-        // if we just read each half of the character separately; utf-32 is fixed-width
-        pulledCodePoint = leadingCharByte;
+
+        if (charByteSize === 8) {
+          // For utf-8, we need to perform special handling for multi-byte sequences
+          if (leadingCharByte < 0x80) {
+            // Single-byte characters are < 0x80
+            pulledCodePoint = leadingCharByte;
+          } else if (leadingCharByte >= 0xc0 && leadingCharByte <= 0xdf) {
+            // 2-byte sequence
+            const nextByte = await readNextChar();
+            if (!nextByte) {
+              return {
+                ch: -1,
+                l: line,
+                c: column,
+                terminatorToken: {
+                  type: LexerTokenType.EOF,
+                  l: line,
+                  c: column,
+                },
+              };
+            } else if (nextByte instanceof Error) {
+              return {
+                ch: -1,
+                l: line,
+                c: column,
+                terminatorToken: {
+                  type: LexerTokenType.ERROR,
+                  value: `An error occurred reading byte-order-marker bytes: ${nextByte.message}`,
+                  l: line,
+                  c: column,
+                },
+              };
+            }
+
+            pulledCodePoint =
+              ((leadingCharByte & 0x1f) << 6) | (nextByte & 0x3f);
+          } else if (leadingCharByte >= 0xe0 && leadingCharByte <= 0xef) {
+            // 3-byte sequence
+            const byte2 = await readNextChar();
+            const byte3 = await readNextChar();
+
+            if (!byte2 || !byte3) {
+              return {
+                ch: -1,
+                l: line,
+                c: column,
+                terminatorToken: {
+                  type: LexerTokenType.EOF,
+                  l: line,
+                  c: column,
+                },
+              };
+            } else if (byte2 instanceof Error || byte3 instanceof Error) {
+              let errorMessage =
+                "An error occurred reading byte-order-marker bytes:";
+              if (byte3 instanceof Error) {
+                errorMessage = `${errorMessage} ${byte3.message}`;
+              } else if (byte2 instanceof Error) {
+                errorMessage = `${errorMessage} ${byte2.message}`;
+              } else {
+                errorMessage = `${errorMessage} Unknown error reading next byte`;
+              }
+
+              return {
+                ch: -1,
+                l: line,
+                c: column,
+                terminatorToken: {
+                  type: LexerTokenType.ERROR,
+                  value:
+                    byte2 instanceof Error
+                      ? byte2.message
+                      : byte3 instanceof Error
+                      ? byte3.message
+                      : "Unknown error reading next byte",
+                  l: line,
+                  c: column,
+                },
+              };
+            }
+
+            pulledCodePoint =
+              ((leadingCharByte & 0x0f) << 12) |
+              ((byte2 & 0x3f) << 6) |
+              (byte3 & 0x3f);
+          } else if (leadingCharByte >= 0xf0 && leadingCharByte <= 0xf7) {
+            // 4-byte sequence
+            const byte2 = await readNextChar();
+            const byte3 = await readNextChar();
+            const byte4 = await readNextChar();
+            if (!byte2 || !byte3 || !byte4) {
+              return {
+                ch: -1,
+                l: line,
+                c: column,
+                terminatorToken: {
+                  type: LexerTokenType.EOF,
+                  l: line,
+                  c: column,
+                },
+              };
+            } else if (
+              byte2 instanceof Error ||
+              byte3 instanceof Error ||
+              byte4 instanceof Error
+            ) {
+              let errorMessage =
+                "An error occurred reading byte-order-marker bytes:";
+              if (byte4 instanceof Error) {
+                errorMessage = `${errorMessage} ${byte4.message}`;
+              } else if (byte3 instanceof Error) {
+                errorMessage = `${errorMessage} ${byte3.message}`;
+              } else if (byte2 instanceof Error) {
+                errorMessage = `${errorMessage} ${byte2.message}`;
+              } else {
+                errorMessage = `${errorMessage} Unknown error reading next byte`;
+              }
+
+              return {
+                ch: -1,
+                l: line,
+                c: column,
+                terminatorToken: {
+                  type: LexerTokenType.ERROR,
+                  value: errorMessage,
+                  l: line,
+                  c: column,
+                },
+              };
+            }
+            pulledCodePoint =
+              ((leadingCharByte & 0x07) << 18) |
+              ((byte2 & 0x3f) << 12) |
+              ((byte3 & 0x3f) << 6) |
+              (byte4 & 0x3f);
+          } else {
+            return {
+              ch: -1,
+              l: line,
+              c: column,
+              terminatorToken: {
+                type: LexerTokenType.ERROR,
+                value: `Invalid UTF-8 leading byte: ${leadingCharByte}`,
+                l: line,
+                c: column,
+              },
+            };
+          }
+        } else {
+          // utf-16 also uses variable-width encoding, but it will just work itself out
+          // if we just read each half of the character separately; utf-32 is fixed-width
+          pulledCodePoint = leadingCharByte;
+        }
       }
-    }
 
-    lastReadCharLine = line;
-    lastReadCharColumn = column;
+      lastReadCharLine = line;
+      lastReadCharColumn = column;
 
-    lastReadCharCode = pulledCodePoint;
+      lastReadCharCode = pulledCodePoint;
 
-    if (isLineBreak(pulledCodePoint)) {
-      ++line;
-      column = 0;
+      if (isLineBreak(pulledCodePoint)) {
+        ++line;
+        column = 0;
+        return {
+          ch: pulledCodePoint,
+          l: line,
+          c: column + 1,
+          terminatorToken: null,
+        };
+      }
+
       return {
         ch: pulledCodePoint,
         l: line,
-        c: column + 1,
+        c: ++column,
         terminatorToken: null,
       };
-    }
-
-    return {
-      ch: pulledCodePoint,
-      l: line,
-      c: ++column,
-      terminatorToken: null,
     };
-  };
 
-  /**
-   * @type {UnreadCharFn}
-   */
-  const unreadChar = () => {
-    if (!hasUnreadLastChar) {
-      line = lastReadCharLine;
-      column = lastReadCharColumn;
-      hasUnreadLastChar = true;
-    } else {
-      return {
-        type: LexerTokenType.ERROR,
-        value: "Cannot unread a character that has not been read",
-        l: line,
-        c: column,
-      };
-    }
-  };
+    /**
+     * @type {UnreadCharFn}
+     */
+    const unreadChar = () => {
+      if (!hasUnreadLastChar) {
+        line = lastReadCharLine;
+        column = lastReadCharColumn;
+        hasUnreadLastChar = true;
+      } else {
+        return {
+          type: LexerTokenType.ERROR,
+          value: "Cannot unread a character that has not been read",
+          l: line,
+          c: column,
+        };
+      }
+    };
 
-  /**
-   * @type {LexerStateFunction<keyof typeof LexerTokenType, any> | null}
-   */
-  let nextStateFunction = lexTextContent;
+    /**
+     * @type {LexerStateFunction<keyof typeof LexerTokenType, any> | null}
+     */
+    let nextStateFunction = lexTextContent;
 
-  try {
-    fileHandle = await open(filePath, "r");
+    try {
+      if ("filePath" in options) {
+        fileHandle = await open(options.filePath, "r");
 
-    const initialReadResult = await fileHandle.read(charChunkBufferView);
-    readableByteCount = initialReadResult.bytesRead;
+        const initialReadResult = await fileHandle.read(charChunkBufferView);
+        readableByteCount = initialReadResult.bytesRead;
 
-    if (readableByteCount >= 4) {
-      const bomBytes = [
-        charChunkBufferView.getUint8(0),
-        charChunkBufferView.getUint8(1),
-        charChunkBufferView.getUint8(2),
-        charChunkBufferView.getUint8(3),
-      ];
+        if (readableByteCount >= 4) {
+          const bomBytes = [
+            charChunkBufferView.getUint8(0),
+            charChunkBufferView.getUint8(1),
+            charChunkBufferView.getUint8(2),
+            charChunkBufferView.getUint8(3),
+          ];
 
-      if (
-        bomBytes[0] === 0xef &&
-        bomBytes[1] === 0xbb &&
-        bomBytes[2] === 0xbf
-      ) {
-        // This is just a UTF-8 BOM; we can keep reading like normal, just skip those initial 3 bytes
-        nextReadOffset = 3;
-        // Leave charByteSize and readBufferedCharBytes as their 8-bit defaults
-      } else if (bomBytes[0] === 0xfe && bomBytes[1] === 0xff) {
-        // UTF-16 big endian
-        charByteSize = 16;
-        nextReadOffset = 2;
-        readBufferedCharBytes = (readOffset) =>
-          // Call getUint16 with the little endian flag set to false
-          charChunkBufferView.getUint16(readOffset, false);
-      } else if (bomBytes[0] === 0xff && bomBytes[1] === 0xfe) {
-        // Little endian!
-        if (bomBytes[2] === 0 && bomBytes[3] === 0) {
-          // UTF-32 little endian
-          charByteSize = 32;
-          nextReadOffset = 4;
-          readBufferedCharBytes = (readOffset) =>
-            // Call getUint32 with the little endian flag set to true
-            charChunkBufferView.getUint32(readOffset, true);
-        } else {
-          // UTF-16 little endian
-          charByteSize = 16;
-          nextReadOffset = 2;
-          readBufferedCharBytes = (readOffset) =>
-            // Call getUint16 with the little endian flag set to true
-            charChunkBufferView.getUint16(readOffset, true);
+          if (
+            bomBytes[0] === 0xef &&
+            bomBytes[1] === 0xbb &&
+            bomBytes[2] === 0xbf
+          ) {
+            // This is just a UTF-8 BOM; we can keep reading like normal, just skip those initial 3 bytes
+            nextReadOffset = 3;
+            // Leave charByteSize and readBufferedCharBytes as their 8-bit defaults
+          } else if (bomBytes[0] === 0xfe && bomBytes[1] === 0xff) {
+            // UTF-16 big endian
+            charByteSize = 16;
+            nextReadOffset = 2;
+            readBufferedCharBytes = (readOffset) =>
+              // Call getUint16 with the little endian flag set to false
+              charChunkBufferView.getUint16(readOffset, false);
+          } else if (bomBytes[0] === 0xff && bomBytes[1] === 0xfe) {
+            // Little endian!
+            if (bomBytes[2] === 0 && bomBytes[3] === 0) {
+              // UTF-32 little endian
+              charByteSize = 32;
+              nextReadOffset = 4;
+              readBufferedCharBytes = (readOffset) =>
+                // Call getUint32 with the little endian flag set to true
+                charChunkBufferView.getUint32(readOffset, true);
+            } else {
+              // UTF-16 little endian
+              charByteSize = 16;
+              nextReadOffset = 2;
+              readBufferedCharBytes = (readOffset) =>
+                // Call getUint16 with the little endian flag set to true
+                charChunkBufferView.getUint16(readOffset, true);
+            }
+          } else if (
+            bomBytes[0] === 0 &&
+            bomBytes[1] === 0 &&
+            bomBytes[2] === 0xfe &&
+            bomBytes[3] === 0xff
+          ) {
+            // UTF-32 big endian
+            charByteSize = 32;
+            nextReadOffset = 4;
+            readBufferedCharBytes = (readOffset) =>
+              // Call getUint32 with the little endian flag set to false
+              charChunkBufferView.getUint32(readOffset, false);
+          }
         }
-      } else if (
-        bomBytes[0] === 0 &&
-        bomBytes[1] === 0 &&
-        bomBytes[2] === 0xfe &&
-        bomBytes[3] === 0xff
-      ) {
-        // UTF-32 big endian
-        charByteSize = 32;
-        nextReadOffset = 4;
-        readBufferedCharBytes = (readOffset) =>
-          // Call getUint32 with the little endian flag set to false
-          charChunkBufferView.getUint32(readOffset, false);
-      }
-    }
 
-    readOffsetIncrement = charByteSize >> 3;
-  } catch (err) {
-    await fileHandle?.close();
-    fileHandle = null;
-    if (err instanceof Error) {
-      throw err;
-    } else {
-      throw new Error(String(err));
-    }
-  }
-
-  try {
-    while (nextStateFunction) {
-      const generator = nextStateFunction(pullChar, unreadChar);
-      let result;
-      while (!(result = await generator.next()).done) {
-        yield result.value;
+        readOffsetIncrement = charByteSize >> 3;
       }
-      // The final value is the returned next state function, or null if we're done
-      nextStateFunction = result.value;
+
+      while (nextStateFunction) {
+        nextStateFunction = await nextStateFunction(
+          pullChar,
+          unreadChar,
+          streamWriter
+        );
+      }
+      await streamWriter.close();
+    } catch (err) {
+      await streamWriter.abort(
+        err instanceof Error ? err : new Error(String(err))
+      );
+    } finally {
+      // Ensure we clean up the file handle even if the loop is broken out of
+      await fileHandle?.close();
+      streamWriter.releaseLock();
     }
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
-    yield {
-      type: LexerTokenType.ERROR,
-      value: errorMessage,
-      l: 0,
-      c: 0,
-    };
-  } finally {
-    // Ensure we clean up the file handle even if the loop is broken out of
-    await fileHandle?.close();
-  }
+  })();
+
+  return transformStream.readable;
 }
 
 /**
@@ -509,7 +534,8 @@ export async function* lex(filePath) {
  * @typedef {(
  *  pullChar: PullCharFn,
  *  unreadChar: UnreadCharFn,
- * ) => AsyncGenerator<LexerToken<T>, TNextStateFunction | null>} LexerStateFunction
+ *  streamWriter: WritableStreamDefaultWriter<LexerToken<T>>
+ * ) => Promise<TNextStateFunction | null>} LexerStateFunction
  */
 
 /**
@@ -524,7 +550,7 @@ export async function* lex(filePath) {
  *  | typeof lexTextContent
  *  >}
  */
-async function* lexTextContent(pullChar, unreadChar) {
+async function lexTextContent(pullChar, unreadChar, streamWriter) {
   /**
    * @type {number|undefined}
    */
@@ -564,14 +590,16 @@ async function* lexTextContent(pullChar, unreadChar) {
     if (terminatorToken) {
       if (terminatorToken.type === LexerTokenType.EOF) {
         // If we have any text content buffered, yield it as a final token before EOF
-        yield {
+        await streamWriter.ready;
+        await streamWriter.write({
           type: LexerTokenType.TEXT_CONTENT,
           value: String.fromCodePoint(...textContentCodes),
           l: startLine,
           c: startColumn,
-        };
+        });
       }
-      yield terminatorToken;
+      await streamWriter.ready;
+      await streamWriter.write(terminatorToken);
       return null;
     }
 
@@ -587,16 +615,18 @@ async function* lexTextContent(pullChar, unreadChar) {
 
         const unreadErrToken = unreadChar();
         if (unreadErrToken) {
-          yield unreadErrToken;
+          await streamWriter.ready;
+          await streamWriter.write(unreadErrToken);
           return null;
         }
 
-        yield {
+        await streamWriter.ready;
+        await streamWriter.write({
           type: LexerTokenType.TEXT_CONTENT,
           value: String.fromCodePoint(...textContentCodes),
           l: startLine,
           c: startColumn,
-        };
+        });
         return lexOpeningTagContents;
       } else if (
         textContentLength >= 2 &&
@@ -608,16 +638,18 @@ async function* lexTextContent(pullChar, unreadChar) {
 
         const unreadErrToken = unreadChar();
         if (unreadErrToken) {
-          yield unreadErrToken;
+          await streamWriter.ready;
+          await streamWriter.write(unreadErrToken);
           return null;
         }
 
-        yield {
+        await streamWriter.ready;
+        await streamWriter.write({
           type: LexerTokenType.TEXT_CONTENT,
           value: String.fromCodePoint(...textContentCodes),
           l: startLine,
           c: startColumn,
-        };
+        });
         return lexClosingTagName;
       }
     } else if (nextCharCode === HYPHEN) {
@@ -630,12 +662,13 @@ async function* lexTextContent(pullChar, unreadChar) {
         textContentCodes[textContentLength - 1] === HYPHEN
       ) {
         textContentCodes.length -= 3;
-        yield {
+        await streamWriter.ready;
+        await streamWriter.write({
           type: LexerTokenType.TEXT_CONTENT,
           value: String.fromCodePoint(...textContentCodes),
           l: startLine,
           c: startColumn,
-        };
+        });
         return lexCommentTag;
       }
     } else if (isWhitespace(nextCharCode)) {
@@ -647,14 +680,16 @@ async function* lexTextContent(pullChar, unreadChar) {
         // Shave off the "<!DOCTYPE" part of the string
         textContentCodes.length -= 9;
 
-        yield {
+        await streamWriter.ready;
+        await streamWriter.write({
           type: LexerTokenType.TEXT_CONTENT,
           value: String.fromCodePoint(...textContentCodes),
           l: startLine,
           c: startColumn,
-        };
-        yield* lexDoctypeDeclaration(
+        });
+        await lexDoctypeDeclaration(
           pullChar,
+          streamWriter,
           // Use the previous line and column in case our whitespace
           // is a line break which could result in an incorrectly
           // reported line and column number for where the <!DOCTYPE> tag started
@@ -733,14 +768,15 @@ async function lexOpeningTagName(pullChar, unreadChar) {
  *   typeof lexTextContent | typeof lexClosingTagEnd
  * >}
  */
-async function* lexOpeningTagContents(pullChar, unreadChar) {
+async function lexOpeningTagContents(pullChar, unreadChar, streamWriter) {
   /**
    * @type {number|null}
    */
   let prevCharCode = null;
 
   const openingTagNameToken = await lexOpeningTagName(pullChar, unreadChar);
-  yield openingTagNameToken;
+  await streamWriter.ready;
+  await streamWriter.write(openingTagNameToken);
 
   if (openingTagNameToken.type !== LexerTokenType.OPENING_TAGNAME) {
     return null;
@@ -759,7 +795,8 @@ async function* lexOpeningTagContents(pullChar, unreadChar) {
     } = await pullChar();
 
     if (terminatorToken) {
-      yield terminatorToken;
+      await streamWriter.ready;
+      await streamWriter.write(terminatorToken);
       return null;
     }
 
@@ -769,11 +806,12 @@ async function* lexOpeningTagContents(pullChar, unreadChar) {
         // If this is a void tag or the tag was terminated with "/>", consider it a
         // self-closing tag with no content.
         if (isVoidTag || prevCharCode === FWD_SLASH) {
-          yield {
+          await streamWriter.ready;
+          await streamWriter.write({
             type: LexerTokenType.SELF_CLOSING_TAG_END,
             l: nextLine,
             c: nextCol,
-          };
+          });
           // Transition to lexing text content after the tag
           return lexTextContent;
         }
@@ -781,16 +819,12 @@ async function* lexOpeningTagContents(pullChar, unreadChar) {
         // If this is a raw text content element,
         // we need to read the raw content inside the element.
         if (isRawTextContentElementTagname(tagname)) {
-          const rawContentGenerator = lexRawElementContent(
+          return lexRawElementContent(
             pullChar,
             unreadChar,
+            streamWriter,
             tagname
           );
-          let result;
-          while (!(result = await rawContentGenerator.next()).done) {
-            yield result.value;
-          }
-          return result.value;
         }
 
         // This is just the end of the opening tag, we don't have any tokens to emit.
@@ -800,13 +834,14 @@ async function* lexOpeningTagContents(pullChar, unreadChar) {
         // We just hit the start of an attribute name. Unread the first char so the next lexer can use it.
         const unreadErrToken = unreadChar();
         if (unreadErrToken) {
-          yield unreadErrToken;
+          await streamWriter.ready;
+          await streamWriter.write(unreadErrToken);
           return null;
         }
 
         // Lex the attribute name and value. lexOpeningTagAttribute doesn't handle state transitions,
-        // so we'l just yield the tokens it emits until it's done.
-        yield* lexOpeningTagAttribute(pullChar, unreadChar);
+        // so we'll just yield the tokens it emits until it's done.
+        await lexOpeningTagAttribute(pullChar, unreadChar, streamWriter);
       }
     }
 
@@ -817,13 +852,14 @@ async function* lexOpeningTagContents(pullChar, unreadChar) {
 /**
  * @type {LexerStateFunction<"ATTRIBUTE_NAME" | "ATTRIBUTE_VALUE" | "EOF" | "ERROR", null>}
  */
-async function* lexOpeningTagAttribute(pullChar, unreadChar) {
+async function lexOpeningTagAttribute(pullChar, unreadChar, streamWriter) {
   const attributeNameToken = await parseOpeningTagAttributeName(
     pullChar,
     unreadChar
   );
 
-  yield attributeNameToken;
+  await streamWriter.ready;
+  await streamWriter.write(attributeNameToken);
   if (
     attributeNameToken.type === LexerTokenType.EOF ||
     attributeNameToken.type === LexerTokenType.ERROR
@@ -835,7 +871,8 @@ async function* lexOpeningTagAttribute(pullChar, unreadChar) {
     await pullChar();
 
   if (terminatorToken) {
-    yield terminatorToken;
+    await streamWriter.ready;
+    await streamWriter.write(terminatorToken);
     return null;
   }
 
@@ -847,24 +884,36 @@ async function* lexOpeningTagAttribute(pullChar, unreadChar) {
     } = await pullChar();
 
     if (quoteOrAttrValueTerminatorToken) {
-      yield quoteOrAttrValueTerminatorToken;
+      await streamWriter.ready;
+      await streamWriter.write(quoteOrAttrValueTerminatorToken);
       return null;
     }
 
     // Unread the next char so the next lexer can use it.
     const unreadErrToken = unreadChar();
     if (unreadErrToken) {
-      yield unreadErrToken;
+      await streamWriter.ready;
+      await streamWriter.write(unreadErrToken);
       return null;
     }
 
     if (isAttributeValueQuoteChar(quoteOrAttributeValueCharCode)) {
-      yield await lexOpeningTagQuotedAttributeValue(pullChar, unreadChar);
+      const token = await lexOpeningTagQuotedAttributeValue(
+        pullChar,
+        unreadChar
+      );
+      await streamWriter.ready;
+      await streamWriter.write(token);
       return null;
     } else if (
       isLegalUnquotedAttributeValueChar(quoteOrAttributeValueCharCode)
     ) {
-      yield await lexOpeningTagUnquotedAttributeValue(pullChar, unreadChar);
+      const token = await lexOpeningTagUnquotedAttributeValue(
+        pullChar,
+        unreadChar
+      );
+      await streamWriter.ready;
+      await streamWriter.write(token);
       return null;
     }
   } else {
@@ -872,7 +921,8 @@ async function* lexOpeningTagAttribute(pullChar, unreadChar) {
     // so we'll transition back to lexing the opening tag contents.
     const unreadErrToken = unreadChar();
     if (unreadErrToken) {
-      yield unreadErrToken;
+      await streamWriter.ready;
+      await streamWriter.write(unreadErrToken);
       return null;
     }
   }
@@ -1071,7 +1121,7 @@ async function lexOpeningTagUnquotedAttributeValue(pullChar, unreadChar) {
  *  typeof lexClosingTagEnd
  * >}
  */
-async function* lexClosingTagName(pullChar, unreadChar) {
+async function lexClosingTagName(pullChar, unreadChar, streamWriter) {
   /**
    * @type {number[]}
    */
@@ -1095,7 +1145,8 @@ async function* lexClosingTagName(pullChar, unreadChar) {
     } = await pullChar();
 
     if (terminatorToken) {
-      yield terminatorToken;
+      await streamWriter.ready;
+      await streamWriter.write(terminatorToken);
       return null;
     }
 
@@ -1107,16 +1158,18 @@ async function* lexClosingTagName(pullChar, unreadChar) {
     if (!isLegalTagNameChar(nextCharCode)) {
       const unreadErrToken = unreadChar();
       if (unreadErrToken) {
-        yield unreadErrToken;
+        await streamWriter.ready;
+        await streamWriter.write(unreadErrToken);
         return null;
       }
 
-      yield {
+      await streamWriter.ready;
+      await streamWriter.write({
         type: LexerTokenType.CLOSING_TAGNAME,
         value: String.fromCodePoint(...tagnameCodePointStr),
         l: startLine,
         c: startColumn,
-      };
+      });
       return lexClosingTagEnd;
     }
 
@@ -1129,7 +1182,7 @@ async function* lexClosingTagName(pullChar, unreadChar) {
  * the closing ">" is encountered.
  * @type {LexerStateFunction<"EOF"|"ERROR", typeof lexTextContent>}
  */
-async function* lexClosingTagEnd(pullChar) {
+async function lexClosingTagEnd(pullChar, unreadChar, streamWriter) {
   /**
    * @type {number|undefined}
    */
@@ -1147,7 +1200,8 @@ async function* lexClosingTagEnd(pullChar) {
       terminatorToken,
     } = await pullChar();
     if (terminatorToken) {
-      yield terminatorToken;
+      await streamWriter.ready;
+      await streamWriter.write(terminatorToken);
       return null;
     }
 
@@ -1171,7 +1225,7 @@ async function* lexClosingTagEnd(pullChar) {
  *  typeof lexTextContent
  * >}
  */
-async function* lexCommentTag(pullChar) {
+async function lexCommentTag(pullChar, unreadChar, streamWriter) {
   /**
    * @type {number|undefined}
    */
@@ -1195,7 +1249,8 @@ async function* lexCommentTag(pullChar) {
     } = await pullChar();
 
     if (terminatorToken) {
-      yield terminatorToken;
+      await streamWriter.ready;
+      await streamWriter.write(terminatorToken);
       return null;
     }
 
@@ -1214,12 +1269,13 @@ async function* lexCommentTag(pullChar) {
     ) {
       commentContentCodePointStr.length -= 2;
 
-      yield {
+      await streamWriter.ready;
+      await streamWriter.write({
         type: LexerTokenType.COMMENT,
         value: String.fromCodePoint(...commentContentCodePointStr).trim(),
         l: startLine,
         c: startColumn,
-      };
+      });
       return lexTextContent;
     }
 
@@ -1232,13 +1288,16 @@ async function* lexCommentTag(pullChar) {
  *
  * @param {PullCharFn} pullChar
  * @param {UnreadCharFn} unreadChar
+ * @param {WritableStreamDefaultWriter<LexerToken<"EOF"|"ERROR"|"TEXT_CONTENT"|"CLOSING_TAGNAME">>} streamWriter
  * @param {string} elementTagName
- * @returns {ReturnType<LexerStateFunction<
- * "EOF"|"ERROR"|"TEXT_CONTENT"|"CLOSING_TAGNAME",
- * typeof lexClosingTagEnd
- * >>}
+ * @returns {Promise<typeof lexClosingTagEnd | null>}
  */
-async function* lexRawElementContent(pullChar, unreadChar, elementTagName) {
+async function lexRawElementContent(
+  pullChar,
+  unreadChar,
+  streamWriter,
+  elementTagName
+) {
   /**
    * @type {number|null}
    */
@@ -1274,7 +1333,8 @@ async function* lexRawElementContent(pullChar, unreadChar, elementTagName) {
     } = await pullChar();
 
     if (terminatorToken) {
-      yield terminatorToken;
+      await streamWriter.ready;
+      await streamWriter.write(terminatorToken);
       return null;
     }
 
@@ -1310,24 +1370,27 @@ async function* lexRawElementContent(pullChar, unreadChar, elementTagName) {
     ) {
       const unreadErrToken = unreadChar();
       if (unreadErrToken) {
-        yield unreadErrToken;
+        await streamWriter.ready;
+        await streamWriter.write(unreadErrToken);
         return null;
       }
 
       const closingTagnameMatchStringLength = closingTagnameMatchString.length;
       rawContentCharCodes.length -= closingTagnameMatchStringLength;
-      yield {
+      await streamWriter.ready;
+      await streamWriter.write({
         type: LexerTokenType.TEXT_CONTENT,
         value: String.fromCodePoint(...rawContentCharCodes),
         l: startLine,
         c: startColumn,
-      };
-      yield {
+      });
+      await streamWriter.ready;
+      await streamWriter.write({
         type: LexerTokenType.CLOSING_TAGNAME,
         value: elementTagName,
         l: nextLine,
         c: nextCol - closingTagnameMatchStringLength,
-      };
+      });
       return lexClosingTagEnd;
     }
 
@@ -1339,11 +1402,17 @@ async function* lexRawElementContent(pullChar, unreadChar, elementTagName) {
  * Lexes a <!DOCTYPE> declaration.
  *
  * @param {PullCharFn} pullChar
+ * @param {WritableStreamDefaultWriter<LexerToken<"EOF" | "ERROR"| "DOCTYPE_DECLARATION">>} streamWriter
  * @param {number} startLine
  * @param {number} startColumn
- * @returns {ReturnType<LexerStateFunction<"EOF"|"ERROR"|"DOCTYPE_DECLARATION", null>>}
+ * @returns {Promise<null>}
  */
-async function* lexDoctypeDeclaration(pullChar, startLine, startColumn) {
+async function lexDoctypeDeclaration(
+  pullChar,
+  streamWriter,
+  startLine,
+  startColumn
+) {
   /**
    * @type {number[]}
    */
@@ -1353,17 +1422,19 @@ async function* lexDoctypeDeclaration(pullChar, startLine, startColumn) {
     const { ch: nextCharCode, terminatorToken } = await pullChar();
 
     if (terminatorToken) {
-      yield terminatorToken;
+      await streamWriter.ready;
+      await streamWriter.write(terminatorToken);
       return null;
     }
 
     if (nextCharCode === CLOSING_ANGLE_BRACKET) {
-      yield {
+      await streamWriter.ready;
+      await streamWriter.write({
         type: LexerTokenType.DOCTYPE_DECLARATION,
         value: String.fromCodePoint(...declarationValuesCodePointString).trim(),
         l: startLine,
         c: startColumn,
-      };
+      });
       return null;
     }
 

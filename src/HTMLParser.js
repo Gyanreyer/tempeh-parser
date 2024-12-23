@@ -1,13 +1,8 @@
 import { Piscina } from "piscina";
-import { MessageChannel } from "node:worker_threads";
-import { tmpdir } from "node:os";
-import { createHash } from "node:crypto";
-import { mkdtemp, unlink, writeFile } from "node:fs/promises";
-import { join } from "node:path";
 
 /**
  * @import { TmphNode } from './types.js';
- * @import { MessagePort } from 'node:worker_threads';
+ * @import { ParseTemplateParams } from './parseTemplate.worker.js';
  */
 
 export class HTMLParseResult {
@@ -57,17 +52,11 @@ export class HTMLParseResult {
 
 export class HTMLParser {
   /**
-   * @type {Piscina<{
-   *  filePath: string;
-   *  messagePort: MessagePort;
-   * }, void>}
+   * @type {Piscina<ParseTemplateParams, void>}
    */
   #pool;
 
-  /**
-   * @param {Object} [options]
-   */
-  constructor(options = {}) {
+  constructor() {
     this.#pool = new Piscina({
       filename: import.meta.resolve("./parseTemplate.worker.js"),
     });
@@ -77,89 +66,36 @@ export class HTMLParser {
    * Takes the path to an HTML file and parses it into a JSON representation.
    * This function is an async generator that yields root-level nodes from the parsed file as they stream in.
    *
-   * @param {string} filePath
+   * @param {{
+   *  filePath: string;
+   *  rawHTMLString?: never;
+   * } | {
+   *  rawHTMLString: string;
+   *  filePath?: never;
+   * }} params
    */
-  async *#runParser(filePath) {
-    const { port1, port2 } = new MessageChannel();
+  async *#runParser(params) {
+    /**
+     * @type {TransformStream<TmphNode | Error>}
+     */
+    const transformStream = new TransformStream();
+
+    const { readable, writable } = transformStream;
 
     const runPromise = this.#pool.run(
-      { filePath, messagePort: port2 },
-      { transferList: [port2] }
+      { ...params, writableStream: writable },
+      {
+        transferList: [
+          // @ts-expect-error - WritableStream is not typed as a TransferListItem, but it can be safely transferred. Don't know what's up with that.
+          writable,
+        ],
+      }
     );
 
     try {
-      while (true) {
-        const nextToken = await /** @type {Promise<TmphNode | null>} */ (
-          new Promise((resolve, reject) => {
-            /**
-             * @param {TmphNode | Error} message
-             */
-            const onMessage = (message) => {
-              cleanupListeners();
-              if (message instanceof Error) {
-                port1.close();
-                reject(message);
-              } else {
-                resolve(message);
-              }
-            };
-            /**
-             * @param {Error} error
-             */
-            const onMessageError = (error) => {
-              cleanupListeners();
-              reject(error);
-            };
-            const onClose = () => {
-              cleanupListeners();
-              resolve(null);
-            };
-            function cleanupListeners() {
-              port1.off("message", onMessage);
-              port1.off("messageerror", onMessageError);
-              port1.off("close", onClose);
-            }
-
-            port1.on("message", onMessage);
-            port1.on("messageerror", onMessageError);
-            port1.on("close", onClose);
-          })
-        );
-
-        if (!nextToken) {
-          break;
-        }
-        yield nextToken;
-      }
+      yield* readable;
     } finally {
-      port1.close();
       await runPromise;
-    }
-  }
-
-  /**
-   * @param {string} htmlString
-   */
-  async *#createTempFileAndRunParser(htmlString) {
-    /**
-     * @type {string|undefined}
-     */
-    let tempFilePath;
-
-    try {
-      // Write the HTML to a temp file and then parse it with parseIterable
-      const tempDirPath = await mkdtemp(join(tmpdir(), `tempeh-html-parser`));
-      const fileHash = createHash("sha256").update(htmlString).digest("hex");
-      tempFilePath = join(tempDirPath, `${fileHash}.html`);
-      await writeFile(tempFilePath, htmlString);
-      yield* this.#runParser(tempFilePath);
-    } catch (err) {
-      // Re-throw any errors
-      throw err;
-    } finally {
-      if (tempFilePath) {
-        await unlink(tempFilePath);
-      }
     }
   }
 
@@ -177,13 +113,13 @@ export class HTMLParser {
    * }
    */
   parseFile(filePath) {
-    return new HTMLParseResult(this.#runParser(filePath));
+    return new HTMLParseResult(this.#runParser({ filePath }));
   }
 
   /**
    * Takes an HTML string and parses it into a JSON representation.
    *
-   * @param {string} htmlString
+   * @param {string} rawHTMLString
    *
    * @example
    * const parser = new HTMLParser();
@@ -192,7 +128,7 @@ export class HTMLParser {
    *   // Or we can process the nodes as they stream in
    * }
    */
-  parseString(htmlString) {
-    return new HTMLParseResult(this.#createTempFileAndRunParser(htmlString));
+  parseString(rawHTMLString) {
+    return new HTMLParseResult(this.#runParser({ rawHTMLString }));
   }
 }
