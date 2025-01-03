@@ -1,13 +1,14 @@
 import { Piscina } from "piscina";
+import parseTemplate from "./parseTemplate.js";
 
 /**
- * @import { TmphNode } from './types.js';
- * @import { ParseTemplateParams } from './parseTemplate.worker.js';
+ * @import { StreamedTmphNode, TmphNode } from './types.js';
+ * @import { ParseTemplateParams } from './parseTemplate.js';
  */
 
 export class HTMLParseResult {
   /**
-   * @type {AsyncGenerator<TmphNode, void, unknown> | null}
+   * @type {AsyncGenerator<StreamedTmphNode, void, unknown> | null}
    */
   #generator;
 
@@ -37,13 +38,38 @@ export class HTMLParseResult {
     }
   }
 
+  /**
+   * @param {StreamedTmphNode} node
+   * @returns {Promise<TmphNode>}
+   */
+  async getResolvedStreamedElementNode(node) {
+    if (!("childStream" in node)) {
+      return node;
+    }
+
+    const { childStream, ...rest } = node;
+
+    /**
+     * @type {TmphNode[]}
+     */
+    const children = [];
+    for await (const child of childStream) {
+      children.push(await this.getResolvedStreamedElementNode(child));
+    }
+
+    return {
+      ...rest,
+      children,
+    };
+  }
+
   async toArray() {
     /**
      * @type {TmphNode[]}
      */
     const nodes = [];
     for await (const node of this) {
-      nodes.push(node);
+      nodes.push(await this.getResolvedStreamedElementNode(node));
     }
 
     return nodes;
@@ -58,7 +84,7 @@ export class HTMLParser {
 
   constructor() {
     this.#pool = new Piscina({
-      filename: import.meta.resolve("./parseTemplate.worker.js"),
+      filename: import.meta.resolve("./parseTemplate.js"),
     });
   }
 
@@ -75,28 +101,21 @@ export class HTMLParser {
    * }} params
    */
   async *#runParser(params) {
-    /**
-     * @type {TransformStream<TmphNode | Error>}
-     */
-    const transformStream = new TransformStream();
+    const rootNodeStream = new TransformStream();
+    const promise = parseTemplate(params, rootNodeStream.writable);
 
-    const { readable, writable } = transformStream;
+    yield* rootNodeStream.readable;
 
-    const runPromise = this.#pool.run(
-      { ...params, writableStream: writable },
-      {
-        transferList: [
-          // @ts-expect-error - WritableStream is not typed as a TransferListItem, but it can be safely transferred. Don't know what's up with that.
-          writable,
-        ],
-      }
-    );
-
-    try {
-      yield* readable;
-    } finally {
-      await runPromise;
-    }
+    await promise;
+    // const runPromise = this.#pool.run(
+    //   { ...params, writableStream: writable },
+    //   {
+    //     transferList: [
+    //       // @ts-expect-error - WritableStream is not typed as a TransferListItem, but it can be safely transferred. Don't know what's up with that.
+    //       writable,
+    //     ],
+    //   }
+    // );
   }
 
   /**

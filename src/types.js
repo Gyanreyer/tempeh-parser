@@ -24,6 +24,15 @@
 /** @typedef {BaseTmphContentProperties & TmphElementNodeProperties} TmphElementNode */
 
 /**
+ * @typedef {Object} StreamedTmphElementNodeProperties
+ * @property {string} tagName
+ * @property {TmphElementAttribute[]} [attributes]
+ * @property {ReadableStream<StreamedTmphNode>} [childStream]
+ */
+
+/** @typedef {BaseTmphContentProperties & StreamedTmphElementNodeProperties} StreamedTmphElementNode */
+
+/**
  * @typedef {Object} TmphTextNodeProperties
  * @property {string} textContent
  */
@@ -41,6 +50,10 @@
 
 /**
  * @typedef {TmphElementNode | TmphTextNode | TmphDoctypeDeclarationNode} TmphNode
+ */
+
+/**
+ * @typedef {StreamedTmphElementNode | TmphTextNode | TmphDoctypeDeclarationNode} StreamedTmphNode
  */
 
 /**

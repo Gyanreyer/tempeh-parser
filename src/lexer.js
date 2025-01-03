@@ -1,5 +1,4 @@
 import { open } from "node:fs/promises";
-import { TransformStream } from "node:stream/web";
 
 import {
   BACK_SLASH,
@@ -39,11 +38,12 @@ export const LexerTokenType = Object.freeze({
   TEXT_CONTENT: 2,
   OPENING_TAGNAME: 3,
   CLOSING_TAGNAME: 4,
-  SELF_CLOSING_TAG_END: 5,
-  ATTRIBUTE_NAME: 6,
-  ATTRIBUTE_VALUE: 7,
-  COMMENT: 8,
-  DOCTYPE_DECLARATION: 9,
+  OPENING_TAG_END: 5,
+  SELF_CLOSING_TAG_END: 6,
+  ATTRIBUTE_NAME: 7,
+  ATTRIBUTE_VALUE: 8,
+  COMMENT: 9,
+  DOCTYPE_DECLARATION: 10,
 });
 
 /**
@@ -65,7 +65,7 @@ export const LexerTokenType = Object.freeze({
 
 /**
  * @typedef LexerTokenWithNoValue
- * @property {typeof LexerTokenType["EOF" | "SELF_CLOSING_TAG_END"]} type
+ * @property {typeof LexerTokenType["EOF" | "SELF_CLOSING_TAG_END" | "OPENING_TAG_END"]} type
  * @property {never} [value]
  * @property {number} l - Line number
  * @property {number} c - Column number
@@ -99,433 +99,426 @@ const BUFFER_CHUNK_SIZE = 256;
 
 /**
  * @param {{
+ *    writableStream: WritableStream<LexerToken>;
+ * } &
+ *  ({
  *  filePath: string;
  * } | {
  *  rawHTMLString: string;
- * }} options
+ * })} options
  */
-export function lex(options) {
-  /**
-   * @type {TransformStream<LexerToken, LexerToken>}
-   */
-  const transformStream = new TransformStream();
-
+export async function lex({ writableStream, ...options }) {
   // IIFE drives the lexer state machine and writes to the transform stream
   // until the input is exhausted or an error occurs.
-  (async () => {
-    const streamWriter = transformStream.writable.getWriter();
+  const streamWriter = writableStream.getWriter();
 
-    /**
-     * @type {FileHandle | null}
-     */
-    let fileHandle = null;
+  /**
+   * @type {FileHandle | null}
+   */
+  let fileHandle = null;
 
-    let hasUnreadLastChar = false;
-    /**
-     * @type {number | null}
-     */
-    let lastReadCharCode = null;
+  let hasUnreadLastChar = false;
+  /**
+   * @type {number | null}
+   */
+  let lastReadCharCode = null;
 
-    let line = 1;
-    let lastReadCharLine = 1;
+  let line = 1;
+  let lastReadCharLine = 1;
 
-    let column = 0;
-    let lastReadCharColumn = 0;
+  let column = 0;
+  let lastReadCharColumn = 0;
 
-    /**
-     * @type {DataView}
-     */
-    let charChunkBufferView;
+  /**
+   * @type {DataView}
+   */
+  let charChunkBufferView;
 
+  /**
+   * @type {number}
+   */
+  let readableByteCount;
+
+  if ("rawHTMLString" in options) {
+    const utf8Encoder = new TextEncoder();
+    const utf8Bytes = utf8Encoder.encode(options.rawHTMLString);
+    charChunkBufferView = new DataView(utf8Bytes.buffer);
+    readableByteCount = utf8Bytes.byteLength;
+  } else {
+    charChunkBufferView = new DataView(new ArrayBuffer(BUFFER_CHUNK_SIZE));
+    readableByteCount = 0;
+  }
+
+  let nextReadOffset = 0;
+
+  /**
+   * @type {8 | 16 | 32}
+   */
+  let charByteSize = 8;
+  let readOffsetIncrement = 1;
+
+  /**
+   * @param {number} readOffset
+   */
+  let readBufferedCharBytes = (readOffset) =>
+    charChunkBufferView.getUint8(readOffset);
+
+  /**
+   * @returns {Promise<number | null | Error>} Returns the next character code point or null if EOF
+   */
+  const readNextChar = async () => {
+    if (nextReadOffset < readableByteCount) {
+      const readOffset = nextReadOffset;
+      nextReadOffset += readOffsetIncrement;
+
+      return readBufferedCharBytes(readOffset) || null;
+    }
+
+    if (!fileHandle) {
+      return null;
+    }
+
+    try {
+      const readResult = await fileHandle.read(charChunkBufferView);
+      readableByteCount = readResult.bytesRead;
+    } catch (err) {
+      if (err instanceof Error) {
+        return err;
+      } else {
+        return new Error(String(err));
+      }
+    }
+
+    if (readableByteCount === 0) {
+      return null;
+    }
+
+    nextReadOffset = 0;
+    return readNextChar();
+  };
+
+  /**
+   * @type {PullCharFn}
+   */
+  const pullChar = async () => {
     /**
      * @type {number}
      */
-    let readableByteCount;
+    let pulledCodePoint;
 
-    if ("rawHTMLString" in options) {
-      const utf8Encoder = new TextEncoder();
-      const utf8Bytes = utf8Encoder.encode(options.rawHTMLString);
-      charChunkBufferView = new DataView(utf8Bytes.buffer);
-      readableByteCount = utf8Bytes.byteLength;
+    if (hasUnreadLastChar && lastReadCharCode !== null) {
+      // If we unread the last character, we'll just re-use it instead of reading a new one.
+      hasUnreadLastChar = false;
+      pulledCodePoint = lastReadCharCode;
     } else {
-      charChunkBufferView = new DataView(new ArrayBuffer(BUFFER_CHUNK_SIZE));
-      readableByteCount = 0;
-    }
-
-    let nextReadOffset = 0;
-
-    /**
-     * @type {8 | 16 | 32}
-     */
-    let charByteSize = 8;
-    let readOffsetIncrement = 1;
-
-    /**
-     * @param {number} readOffset
-     */
-    let readBufferedCharBytes = (readOffset) =>
-      charChunkBufferView.getUint8(readOffset);
-
-    /**
-     * @returns {Promise<number | null | Error>} Returns the next character code point or null if EOF
-     */
-    const readNextChar = async () => {
-      if (nextReadOffset < readableByteCount) {
-        const readOffset = nextReadOffset;
-        nextReadOffset += readOffsetIncrement;
-
-        return readBufferedCharBytes(readOffset) || null;
-      }
-
-      if (!fileHandle) {
-        return null;
-      }
-
-      try {
-        const readResult = await fileHandle.read(charChunkBufferView);
-        readableByteCount = readResult.bytesRead;
-      } catch (err) {
-        if (err instanceof Error) {
-          return err;
-        } else {
-          return new Error(String(err));
-        }
-      }
-
-      if (readableByteCount === 0) {
-        return null;
-      }
-
-      nextReadOffset = 0;
-      return readNextChar();
-    };
-
-    /**
-     * @type {PullCharFn}
-     */
-    const pullChar = async () => {
-      /**
-       * @type {number}
-       */
-      let pulledCodePoint;
-
-      if (hasUnreadLastChar && lastReadCharCode !== null) {
-        // If we unread the last character, we'll just re-use it instead of reading a new one.
-        hasUnreadLastChar = false;
-        pulledCodePoint = lastReadCharCode;
-      } else {
-        const leadingCharByte = await readNextChar();
-        if (leadingCharByte === null) {
-          return {
-            ch: -1,
+      const leadingCharByte = await readNextChar();
+      if (leadingCharByte === null) {
+        return {
+          ch: -1,
+          l: line,
+          c: column,
+          terminatorToken: {
+            type: LexerTokenType.EOF,
             l: line,
             c: column,
-            terminatorToken: {
-              type: LexerTokenType.EOF,
-              l: line,
-              c: column,
-            },
-          };
-        } else if (leadingCharByte instanceof Error) {
-          return {
-            ch: -1,
+          },
+        };
+      } else if (leadingCharByte instanceof Error) {
+        return {
+          ch: -1,
+          l: line,
+          c: column,
+          terminatorToken: {
+            type: LexerTokenType.ERROR,
+            value: leadingCharByte.message,
             l: line,
             c: column,
-            terminatorToken: {
-              type: LexerTokenType.ERROR,
-              value: leadingCharByte.message,
+          },
+        };
+      }
+
+      if (charByteSize === 8) {
+        // For utf-8, we need to perform special handling for multi-byte sequences
+        if (leadingCharByte < 0x80) {
+          // Single-byte characters are < 0x80
+          pulledCodePoint = leadingCharByte;
+        } else if (leadingCharByte >= 0xc0 && leadingCharByte <= 0xdf) {
+          // 2-byte sequence
+          const nextByte = await readNextChar();
+          if (!nextByte) {
+            return {
+              ch: -1,
               l: line,
               c: column,
-            },
-          };
-        }
-
-        if (charByteSize === 8) {
-          // For utf-8, we need to perform special handling for multi-byte sequences
-          if (leadingCharByte < 0x80) {
-            // Single-byte characters are < 0x80
-            pulledCodePoint = leadingCharByte;
-          } else if (leadingCharByte >= 0xc0 && leadingCharByte <= 0xdf) {
-            // 2-byte sequence
-            const nextByte = await readNextChar();
-            if (!nextByte) {
-              return {
-                ch: -1,
+              terminatorToken: {
+                type: LexerTokenType.EOF,
                 l: line,
                 c: column,
-                terminatorToken: {
-                  type: LexerTokenType.EOF,
-                  l: line,
-                  c: column,
-                },
-              };
-            } else if (nextByte instanceof Error) {
-              return {
-                ch: -1,
-                l: line,
-                c: column,
-                terminatorToken: {
-                  type: LexerTokenType.ERROR,
-                  value: `An error occurred reading byte-order-marker bytes: ${nextByte.message}`,
-                  l: line,
-                  c: column,
-                },
-              };
-            }
-
-            pulledCodePoint =
-              ((leadingCharByte & 0x1f) << 6) | (nextByte & 0x3f);
-          } else if (leadingCharByte >= 0xe0 && leadingCharByte <= 0xef) {
-            // 3-byte sequence
-            const byte2 = await readNextChar();
-            const byte3 = await readNextChar();
-
-            if (!byte2 || !byte3) {
-              return {
-                ch: -1,
-                l: line,
-                c: column,
-                terminatorToken: {
-                  type: LexerTokenType.EOF,
-                  l: line,
-                  c: column,
-                },
-              };
-            } else if (byte2 instanceof Error || byte3 instanceof Error) {
-              let errorMessage =
-                "An error occurred reading byte-order-marker bytes:";
-              if (byte3 instanceof Error) {
-                errorMessage = `${errorMessage} ${byte3.message}`;
-              } else if (byte2 instanceof Error) {
-                errorMessage = `${errorMessage} ${byte2.message}`;
-              } else {
-                errorMessage = `${errorMessage} Unknown error reading next byte`;
-              }
-
-              return {
-                ch: -1,
-                l: line,
-                c: column,
-                terminatorToken: {
-                  type: LexerTokenType.ERROR,
-                  value:
-                    byte2 instanceof Error
-                      ? byte2.message
-                      : byte3 instanceof Error
-                      ? byte3.message
-                      : "Unknown error reading next byte",
-                  l: line,
-                  c: column,
-                },
-              };
-            }
-
-            pulledCodePoint =
-              ((leadingCharByte & 0x0f) << 12) |
-              ((byte2 & 0x3f) << 6) |
-              (byte3 & 0x3f);
-          } else if (leadingCharByte >= 0xf0 && leadingCharByte <= 0xf7) {
-            // 4-byte sequence
-            const byte2 = await readNextChar();
-            const byte3 = await readNextChar();
-            const byte4 = await readNextChar();
-            if (!byte2 || !byte3 || !byte4) {
-              return {
-                ch: -1,
-                l: line,
-                c: column,
-                terminatorToken: {
-                  type: LexerTokenType.EOF,
-                  l: line,
-                  c: column,
-                },
-              };
-            } else if (
-              byte2 instanceof Error ||
-              byte3 instanceof Error ||
-              byte4 instanceof Error
-            ) {
-              let errorMessage =
-                "An error occurred reading byte-order-marker bytes:";
-              if (byte4 instanceof Error) {
-                errorMessage = `${errorMessage} ${byte4.message}`;
-              } else if (byte3 instanceof Error) {
-                errorMessage = `${errorMessage} ${byte3.message}`;
-              } else if (byte2 instanceof Error) {
-                errorMessage = `${errorMessage} ${byte2.message}`;
-              } else {
-                errorMessage = `${errorMessage} Unknown error reading next byte`;
-              }
-
-              return {
-                ch: -1,
-                l: line,
-                c: column,
-                terminatorToken: {
-                  type: LexerTokenType.ERROR,
-                  value: errorMessage,
-                  l: line,
-                  c: column,
-                },
-              };
-            }
-            pulledCodePoint =
-              ((leadingCharByte & 0x07) << 18) |
-              ((byte2 & 0x3f) << 12) |
-              ((byte3 & 0x3f) << 6) |
-              (byte4 & 0x3f);
-          } else {
+              },
+            };
+          } else if (nextByte instanceof Error) {
             return {
               ch: -1,
               l: line,
               c: column,
               terminatorToken: {
                 type: LexerTokenType.ERROR,
-                value: `Invalid UTF-8 leading byte: ${leadingCharByte}`,
+                value: `An error occurred reading byte-order-marker bytes: ${nextByte.message}`,
                 l: line,
                 c: column,
               },
             };
           }
+
+          pulledCodePoint = ((leadingCharByte & 0x1f) << 6) | (nextByte & 0x3f);
+        } else if (leadingCharByte >= 0xe0 && leadingCharByte <= 0xef) {
+          // 3-byte sequence
+          const byte2 = await readNextChar();
+          const byte3 = await readNextChar();
+
+          if (!byte2 || !byte3) {
+            return {
+              ch: -1,
+              l: line,
+              c: column,
+              terminatorToken: {
+                type: LexerTokenType.EOF,
+                l: line,
+                c: column,
+              },
+            };
+          } else if (byte2 instanceof Error || byte3 instanceof Error) {
+            let errorMessage =
+              "An error occurred reading byte-order-marker bytes:";
+            if (byte3 instanceof Error) {
+              errorMessage = `${errorMessage} ${byte3.message}`;
+            } else if (byte2 instanceof Error) {
+              errorMessage = `${errorMessage} ${byte2.message}`;
+            } else {
+              errorMessage = `${errorMessage} Unknown error reading next byte`;
+            }
+
+            return {
+              ch: -1,
+              l: line,
+              c: column,
+              terminatorToken: {
+                type: LexerTokenType.ERROR,
+                value:
+                  byte2 instanceof Error
+                    ? byte2.message
+                    : byte3 instanceof Error
+                    ? byte3.message
+                    : "Unknown error reading next byte",
+                l: line,
+                c: column,
+              },
+            };
+          }
+
+          pulledCodePoint =
+            ((leadingCharByte & 0x0f) << 12) |
+            ((byte2 & 0x3f) << 6) |
+            (byte3 & 0x3f);
+        } else if (leadingCharByte >= 0xf0 && leadingCharByte <= 0xf7) {
+          // 4-byte sequence
+          const byte2 = await readNextChar();
+          const byte3 = await readNextChar();
+          const byte4 = await readNextChar();
+          if (!byte2 || !byte3 || !byte4) {
+            return {
+              ch: -1,
+              l: line,
+              c: column,
+              terminatorToken: {
+                type: LexerTokenType.EOF,
+                l: line,
+                c: column,
+              },
+            };
+          } else if (
+            byte2 instanceof Error ||
+            byte3 instanceof Error ||
+            byte4 instanceof Error
+          ) {
+            let errorMessage =
+              "An error occurred reading byte-order-marker bytes:";
+            if (byte4 instanceof Error) {
+              errorMessage = `${errorMessage} ${byte4.message}`;
+            } else if (byte3 instanceof Error) {
+              errorMessage = `${errorMessage} ${byte3.message}`;
+            } else if (byte2 instanceof Error) {
+              errorMessage = `${errorMessage} ${byte2.message}`;
+            } else {
+              errorMessage = `${errorMessage} Unknown error reading next byte`;
+            }
+
+            return {
+              ch: -1,
+              l: line,
+              c: column,
+              terminatorToken: {
+                type: LexerTokenType.ERROR,
+                value: errorMessage,
+                l: line,
+                c: column,
+              },
+            };
+          }
+          pulledCodePoint =
+            ((leadingCharByte & 0x07) << 18) |
+            ((byte2 & 0x3f) << 12) |
+            ((byte3 & 0x3f) << 6) |
+            (byte4 & 0x3f);
         } else {
-          // utf-16 also uses variable-width encoding, but it will just work itself out
-          // if we just read each half of the character separately; utf-32 is fixed-width
-          pulledCodePoint = leadingCharByte;
+          return {
+            ch: -1,
+            l: line,
+            c: column,
+            terminatorToken: {
+              type: LexerTokenType.ERROR,
+              value: `Invalid UTF-8 leading byte: ${leadingCharByte}`,
+              l: line,
+              c: column,
+            },
+          };
         }
+      } else {
+        // utf-16 also uses variable-width encoding, but it will just work itself out
+        // if we just read each half of the character separately; utf-32 is fixed-width
+        pulledCodePoint = leadingCharByte;
       }
+    }
 
-      lastReadCharLine = line;
-      lastReadCharColumn = column;
+    lastReadCharLine = line;
+    lastReadCharColumn = column;
 
-      lastReadCharCode = pulledCodePoint;
+    lastReadCharCode = pulledCodePoint;
 
-      if (isLineBreak(pulledCodePoint)) {
-        ++line;
-        column = 0;
-        return {
-          ch: pulledCodePoint,
-          l: line,
-          c: column + 1,
-          terminatorToken: null,
-        };
-      }
-
+    if (isLineBreak(pulledCodePoint)) {
+      ++line;
+      column = 0;
       return {
         ch: pulledCodePoint,
         l: line,
-        c: ++column,
+        c: column + 1,
         terminatorToken: null,
       };
+    }
+
+    return {
+      ch: pulledCodePoint,
+      l: line,
+      c: ++column,
+      terminatorToken: null,
     };
+  };
 
-    /**
-     * @type {UnreadCharFn}
-     */
-    const unreadChar = () => {
-      if (!hasUnreadLastChar) {
-        line = lastReadCharLine;
-        column = lastReadCharColumn;
-        hasUnreadLastChar = true;
-      } else {
-        return {
-          type: LexerTokenType.ERROR,
-          value: "Cannot unread a character that has not been read",
-          l: line,
-          c: column,
-        };
-      }
-    };
+  /**
+   * @type {UnreadCharFn}
+   */
+  const unreadChar = () => {
+    if (!hasUnreadLastChar) {
+      line = lastReadCharLine;
+      column = lastReadCharColumn;
+      hasUnreadLastChar = true;
+    } else {
+      return {
+        type: LexerTokenType.ERROR,
+        value: "Cannot unread a character that has not been read",
+        l: line,
+        c: column,
+      };
+    }
+  };
 
-    /**
-     * @type {LexerStateFunction<keyof typeof LexerTokenType, any> | null}
-     */
-    let nextStateFunction = lexTextContent;
+  /**
+   * @type {LexerStateFunction<keyof typeof LexerTokenType, any> | null}
+   */
+  let nextStateFunction = lexTextContent;
 
-    try {
-      if ("filePath" in options) {
-        fileHandle = await open(options.filePath, "r");
+  try {
+    if ("filePath" in options) {
+      fileHandle = await open(options.filePath, "r");
 
-        const initialReadResult = await fileHandle.read(charChunkBufferView);
-        readableByteCount = initialReadResult.bytesRead;
+      const initialReadResult = await fileHandle.read(charChunkBufferView);
+      readableByteCount = initialReadResult.bytesRead;
 
-        if (readableByteCount >= 4) {
-          const bomBytes = [
-            charChunkBufferView.getUint8(0),
-            charChunkBufferView.getUint8(1),
-            charChunkBufferView.getUint8(2),
-            charChunkBufferView.getUint8(3),
-          ];
+      if (readableByteCount >= 4) {
+        const bomBytes = [
+          charChunkBufferView.getUint8(0),
+          charChunkBufferView.getUint8(1),
+          charChunkBufferView.getUint8(2),
+          charChunkBufferView.getUint8(3),
+        ];
 
-          if (
-            bomBytes[0] === 0xef &&
-            bomBytes[1] === 0xbb &&
-            bomBytes[2] === 0xbf
-          ) {
-            // This is just a UTF-8 BOM; we can keep reading like normal, just skip those initial 3 bytes
-            nextReadOffset = 3;
-            // Leave charByteSize and readBufferedCharBytes as their 8-bit defaults
-          } else if (bomBytes[0] === 0xfe && bomBytes[1] === 0xff) {
-            // UTF-16 big endian
-            charByteSize = 16;
-            nextReadOffset = 2;
-            readBufferedCharBytes = (readOffset) =>
-              // Call getUint16 with the little endian flag set to false
-              charChunkBufferView.getUint16(readOffset, false);
-          } else if (bomBytes[0] === 0xff && bomBytes[1] === 0xfe) {
-            // Little endian!
-            if (bomBytes[2] === 0 && bomBytes[3] === 0) {
-              // UTF-32 little endian
-              charByteSize = 32;
-              nextReadOffset = 4;
-              readBufferedCharBytes = (readOffset) =>
-                // Call getUint32 with the little endian flag set to true
-                charChunkBufferView.getUint32(readOffset, true);
-            } else {
-              // UTF-16 little endian
-              charByteSize = 16;
-              nextReadOffset = 2;
-              readBufferedCharBytes = (readOffset) =>
-                // Call getUint16 with the little endian flag set to true
-                charChunkBufferView.getUint16(readOffset, true);
-            }
-          } else if (
-            bomBytes[0] === 0 &&
-            bomBytes[1] === 0 &&
-            bomBytes[2] === 0xfe &&
-            bomBytes[3] === 0xff
-          ) {
-            // UTF-32 big endian
+        if (
+          bomBytes[0] === 0xef &&
+          bomBytes[1] === 0xbb &&
+          bomBytes[2] === 0xbf
+        ) {
+          // This is just a UTF-8 BOM; we can keep reading like normal, just skip those initial 3 bytes
+          nextReadOffset = 3;
+          // Leave charByteSize and readBufferedCharBytes as their 8-bit defaults
+        } else if (bomBytes[0] === 0xfe && bomBytes[1] === 0xff) {
+          // UTF-16 big endian
+          charByteSize = 16;
+          nextReadOffset = 2;
+          readBufferedCharBytes = (readOffset) =>
+            // Call getUint16 with the little endian flag set to false
+            charChunkBufferView.getUint16(readOffset, false);
+        } else if (bomBytes[0] === 0xff && bomBytes[1] === 0xfe) {
+          // Little endian!
+          if (bomBytes[2] === 0 && bomBytes[3] === 0) {
+            // UTF-32 little endian
             charByteSize = 32;
             nextReadOffset = 4;
             readBufferedCharBytes = (readOffset) =>
-              // Call getUint32 with the little endian flag set to false
-              charChunkBufferView.getUint32(readOffset, false);
+              // Call getUint32 with the little endian flag set to true
+              charChunkBufferView.getUint32(readOffset, true);
+          } else {
+            // UTF-16 little endian
+            charByteSize = 16;
+            nextReadOffset = 2;
+            readBufferedCharBytes = (readOffset) =>
+              // Call getUint16 with the little endian flag set to true
+              charChunkBufferView.getUint16(readOffset, true);
           }
+        } else if (
+          bomBytes[0] === 0 &&
+          bomBytes[1] === 0 &&
+          bomBytes[2] === 0xfe &&
+          bomBytes[3] === 0xff
+        ) {
+          // UTF-32 big endian
+          charByteSize = 32;
+          nextReadOffset = 4;
+          readBufferedCharBytes = (readOffset) =>
+            // Call getUint32 with the little endian flag set to false
+            charChunkBufferView.getUint32(readOffset, false);
         }
-
-        readOffsetIncrement = charByteSize >> 3;
       }
 
-      while (nextStateFunction) {
-        nextStateFunction = await nextStateFunction(
-          pullChar,
-          unreadChar,
-          streamWriter
-        );
-      }
-      await streamWriter.close();
-    } catch (err) {
-      await streamWriter.abort(
-        err instanceof Error ? err : new Error(String(err))
-      );
-    } finally {
-      // Ensure we clean up the file handle even if the loop is broken out of
-      await fileHandle?.close();
-      streamWriter.releaseLock();
+      readOffsetIncrement = charByteSize >> 3;
     }
-  })();
 
-  return transformStream.readable;
+    while (nextStateFunction) {
+      nextStateFunction = await nextStateFunction(
+        pullChar,
+        unreadChar,
+        streamWriter
+      );
+    }
+    await streamWriter.close();
+  } catch (err) {
+    await streamWriter.abort(
+      err instanceof Error ? err : new Error(String(err))
+    );
+  } finally {
+    // Ensure we clean up the file handle even if the loop is broken out of
+    await fileHandle?.close();
+    streamWriter.releaseLock();
+  }
 }
 
 /**
@@ -764,7 +757,7 @@ async function lexOpeningTagName(pullChar, unreadChar) {
 
 /**
  * @type {LexerStateFunction<
- *   "OPENING_TAGNAME"|"ATTRIBUTE_NAME"|"ATTRIBUTE_VALUE"|"TEXT_CONTENT"|"SELF_CLOSING_TAG_END"|"CLOSING_TAGNAME"|"EOF"|"ERROR",
+ *   "OPENING_TAGNAME"|"ATTRIBUTE_NAME"|"ATTRIBUTE_VALUE"|"TEXT_CONTENT"|"SELF_CLOSING_TAG_END"|"OPENING_TAG_END"|"CLOSING_TAGNAME"|"EOF"|"ERROR",
  *   typeof lexTextContent | typeof lexClosingTagEnd
  * >}
  */
@@ -815,6 +808,13 @@ async function lexOpeningTagContents(pullChar, unreadChar, streamWriter) {
           // Transition to lexing text content after the tag
           return lexTextContent;
         }
+
+        await streamWriter.ready;
+        await streamWriter.write({
+          type: LexerTokenType.OPENING_TAG_END,
+          l: nextLine,
+          c: nextCol,
+        });
 
         // If this is a raw text content element,
         // we need to read the raw content inside the element.

@@ -14,7 +14,17 @@ function resolveRelativePath(path) {
 const fixturesDirPath = resolveRelativePath("../test/fixtures/");
 
 const testFixtureFilePaths = await readdir(fixturesDirPath).then((fileNames) =>
-  fileNames.map((fileName) => path.join(fixturesDirPath, fileName))
+  fileNames
+    // .filter(
+    //   (fileName) =>
+    //     fileName !== "componentWithAsyncAttributes.tmph.html" &&
+    //     fileName !== "geyer.dev.tmph.html" &&
+    //     fileName !== "incompleteElement.tmph.html" &&
+    //     fileName !== "inlineSubComponents.tmph.html" &&
+    //     fileName === "layout.tmph.html" &&
+    //     fileName !== "unicode.tmph.html"
+    // )
+    .map((fileName) => path.join(fixturesDirPath, fileName))
 );
 
 // const totalMemory = os.totalmem() >> 10;
@@ -68,8 +78,7 @@ for (const filePath of testFixtureFilePaths) {
   for (let i = 0; i < runCount; ++i) {
     const startTime = performance.now();
 
-    for await (const token of parser.parseFile(filePath)) {
-    }
+    await parser.parseFile(filePath).toArray();
 
     const parseTemplateEndTime = performance.now();
     totalTime += parseTemplateEndTime - startTime;
