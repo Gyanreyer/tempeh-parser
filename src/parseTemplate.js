@@ -3,7 +3,7 @@ import { LexerTokenType } from "./lexer.js";
 import Piscina from "piscina";
 
 /**
- * @import { StreamedTmphElementNode, TmphTextNode, TmphDoctypeDeclarationNode, StreamedTmphNode } from "./types.js";
+ * @import { StreamedTmphElementNode, TmphTextNode, TmphDoctypeDeclarationNode, TmphCommentNode, StreamedTmphNode } from "./types.js";
  * @import {LexerToken} from './lexer.js';
  */
 
@@ -114,11 +114,14 @@ async function parseChildNodes(
               if (lastAttribute) {
                 lastAttribute.value = openingTagToken.value;
               } else {
-                throw new Error(
-                  `Tempeh parsing error: Encountered unexpected attribute value at ${
-                    lexerParams.filePath ? `${lexerParams.filePath}:` : ""
-                  }${openingTagToken.l}:${openingTagToken.c}`
+                await parentChildStreamWriter.abort(
+                  new Error(
+                    `Tempeh parsing error: Encountered unexpected attribute value at ${
+                      lexerParams.filePath ? `${lexerParams.filePath}:` : ""
+                    }${openingTagToken.l}:${openingTagToken.c}`
+                  )
                 );
+                return null;
               }
               break;
             }
@@ -162,11 +165,14 @@ async function parseChildNodes(
                 Object.entries(LexerTokenType).find(
                   ([key, value]) => value === openingTagToken.type
                 )?.[0] ?? `UNKNOWN:${openingTagToken.type}`;
-              throw new Error(
-                `Tempeh parsing error: Encountered unexpected token type ${tokenTypeDisplayName} at ${
-                  lexerParams.filePath ? `${lexerParams.filePath}:` : ""
-                }${openingTagToken.l}:${openingTagToken.c}`
+              await parentChildStreamWriter.abort(
+                new Error(
+                  `Tempeh parsing error: Encountered unexpected token type ${tokenTypeDisplayName} at ${
+                    lexerParams.filePath ? `${lexerParams.filePath}:` : ""
+                  }${openingTagToken.l}:${openingTagToken.c}`
+                )
               );
+              return null;
           }
         }
         break;
@@ -186,7 +192,14 @@ async function parseChildNodes(
         break;
       }
       case LexerTokenType.COMMENT: {
-        // Ignore comments
+        await parentChildStreamWriter.ready;
+        await parentChildStreamWriter.write(
+          /** @satisfies {TmphCommentNode} */ {
+            comment: token.value,
+            l: token.l,
+            c: token.c,
+          }
+        );
         break;
       }
       default: {
@@ -194,11 +207,14 @@ async function parseChildNodes(
           Object.entries(LexerTokenType).find(
             ([key, value]) => value === token.type
           )?.[0] ?? `UNKNOWN:${token.type}`;
-        throw new Error(
-          `Tempeh parsing error: Encountered unexpected token type ${tokenTypeDisplayName} at ${
-            lexerParams.filePath ? `${lexerParams.filePath}:` : ""
-          }${token.l}:${token.c}`
+        await parentChildStreamWriter.abort(
+          new Error(
+            `Tempeh parsing error: Encountered unexpected token type ${tokenTypeDisplayName} at ${
+              lexerParams.filePath ? `${lexerParams.filePath}:` : ""
+            }${token.l}:${token.c}`
+          )
         );
+        return null;
       }
     }
   }
@@ -233,8 +249,10 @@ export default async function parseTemplate(lexerParams, rootNodeStream) {
       lexerTokenTransformStream.readable.getReader(),
       rootNodeStreamWriter
     );
-  } finally {
     await rootNodeStreamWriter.close();
+  } catch (err) {
+    await rootNodeStreamWriter.abort(err);
+  } finally {
     await runPromise;
   }
 }

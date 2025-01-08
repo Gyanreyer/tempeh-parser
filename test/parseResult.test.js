@@ -8,11 +8,21 @@ describe("HTMLParseResult", () => {
     const htmlParser = new HTMLParser();
     const htmlString = "<div>Hello, world!</div>";
     const parseResult = htmlParser.parseString(htmlString);
-    const nodes = [];
     assert.strictEqual(parseResult.used, false);
-    for await (const node of parseResult) {
-      nodes.push(node);
+    /**
+     * Recursively exhausts a parse result stream.
+     *
+     * @param {any} nodeStream
+     */
+    async function exhaustParseResult(nodeStream) {
+      for await (const node of nodeStream) {
+        if ("childStream" in node) {
+          await exhaustParseResult(node.childStream);
+        }
+      }
     }
+    await exhaustParseResult(parseResult);
+
     assert.strictEqual(parseResult.used, true);
     assert.rejects(
       () => parseResult.toArray(),
