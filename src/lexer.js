@@ -583,16 +583,14 @@ async function lexTextContent(pullChar, unreadChar, streamWriter) {
     if (terminatorToken) {
       if (terminatorToken.type === LexerTokenType.EOF) {
         // If we have any text content buffered, yield it as a final token before EOF
-        await streamWriter.ready;
-        await streamWriter.write({
+        streamWriter.write({
           type: LexerTokenType.TEXT_CONTENT,
           value: String.fromCodePoint(...textContentCodes),
           l: startLine,
           c: startColumn,
         });
       }
-      await streamWriter.ready;
-      await streamWriter.write(terminatorToken);
+      streamWriter.write(terminatorToken);
       return null;
     }
 
@@ -608,13 +606,11 @@ async function lexTextContent(pullChar, unreadChar, streamWriter) {
 
         const unreadErrToken = unreadChar();
         if (unreadErrToken) {
-          await streamWriter.ready;
-          await streamWriter.write(unreadErrToken);
+          streamWriter.write(unreadErrToken);
           return null;
         }
 
-        await streamWriter.ready;
-        await streamWriter.write({
+        streamWriter.write({
           type: LexerTokenType.TEXT_CONTENT,
           value: String.fromCodePoint(...textContentCodes),
           l: startLine,
@@ -631,13 +627,11 @@ async function lexTextContent(pullChar, unreadChar, streamWriter) {
 
         const unreadErrToken = unreadChar();
         if (unreadErrToken) {
-          await streamWriter.ready;
-          await streamWriter.write(unreadErrToken);
+          streamWriter.write(unreadErrToken);
           return null;
         }
 
-        await streamWriter.ready;
-        await streamWriter.write({
+        streamWriter.write({
           type: LexerTokenType.TEXT_CONTENT,
           value: String.fromCodePoint(...textContentCodes),
           l: startLine,
@@ -655,8 +649,7 @@ async function lexTextContent(pullChar, unreadChar, streamWriter) {
         textContentCodes[textContentLength - 1] === HYPHEN
       ) {
         textContentCodes.length -= 3;
-        await streamWriter.ready;
-        await streamWriter.write({
+        streamWriter.write({
           type: LexerTokenType.TEXT_CONTENT,
           value: String.fromCodePoint(...textContentCodes),
           l: startLine,
@@ -673,8 +666,7 @@ async function lexTextContent(pullChar, unreadChar, streamWriter) {
         // Shave off the "<!DOCTYPE" part of the string
         textContentCodes.length -= 9;
 
-        await streamWriter.ready;
-        await streamWriter.write({
+        streamWriter.write({
           type: LexerTokenType.TEXT_CONTENT,
           value: String.fromCodePoint(...textContentCodes),
           l: startLine,
@@ -768,8 +760,7 @@ async function lexOpeningTagContents(pullChar, unreadChar, streamWriter) {
   let prevCharCode = null;
 
   const openingTagNameToken = await lexOpeningTagName(pullChar, unreadChar);
-  await streamWriter.ready;
-  await streamWriter.write(openingTagNameToken);
+  streamWriter.write(openingTagNameToken);
 
   if (openingTagNameToken.type !== LexerTokenType.OPENING_TAGNAME) {
     return null;
@@ -788,8 +779,7 @@ async function lexOpeningTagContents(pullChar, unreadChar, streamWriter) {
     } = await pullChar();
 
     if (terminatorToken) {
-      await streamWriter.ready;
-      await streamWriter.write(terminatorToken);
+      streamWriter.write(terminatorToken);
       return null;
     }
 
@@ -799,8 +789,7 @@ async function lexOpeningTagContents(pullChar, unreadChar, streamWriter) {
         // If this is a void tag or the tag was terminated with "/>", consider it a
         // self-closing tag with no content.
         if (isVoidTag || prevCharCode === FWD_SLASH) {
-          await streamWriter.ready;
-          await streamWriter.write({
+          streamWriter.write({
             type: LexerTokenType.SELF_CLOSING_TAG_END,
             l: nextLine,
             c: nextCol,
@@ -809,8 +798,7 @@ async function lexOpeningTagContents(pullChar, unreadChar, streamWriter) {
           return lexTextContent;
         }
 
-        await streamWriter.ready;
-        await streamWriter.write({
+        streamWriter.write({
           type: LexerTokenType.OPENING_TAG_END,
           l: nextLine,
           c: nextCol,
@@ -834,8 +822,7 @@ async function lexOpeningTagContents(pullChar, unreadChar, streamWriter) {
         // We just hit the start of an attribute name. Unread the first char so the next lexer can use it.
         const unreadErrToken = unreadChar();
         if (unreadErrToken) {
-          await streamWriter.ready;
-          await streamWriter.write(unreadErrToken);
+          streamWriter.write(unreadErrToken);
           return null;
         }
 
@@ -858,8 +845,7 @@ async function lexOpeningTagAttribute(pullChar, unreadChar, streamWriter) {
     unreadChar
   );
 
-  await streamWriter.ready;
-  await streamWriter.write(attributeNameToken);
+  streamWriter.write(attributeNameToken);
   if (
     attributeNameToken.type === LexerTokenType.EOF ||
     attributeNameToken.type === LexerTokenType.ERROR
@@ -871,8 +857,7 @@ async function lexOpeningTagAttribute(pullChar, unreadChar, streamWriter) {
     await pullChar();
 
   if (terminatorToken) {
-    await streamWriter.ready;
-    await streamWriter.write(terminatorToken);
+    streamWriter.write(terminatorToken);
     return null;
   }
 
@@ -884,16 +869,14 @@ async function lexOpeningTagAttribute(pullChar, unreadChar, streamWriter) {
     } = await pullChar();
 
     if (quoteOrAttrValueTerminatorToken) {
-      await streamWriter.ready;
-      await streamWriter.write(quoteOrAttrValueTerminatorToken);
+      streamWriter.write(quoteOrAttrValueTerminatorToken);
       return null;
     }
 
     // Unread the next char so the next lexer can use it.
     const unreadErrToken = unreadChar();
     if (unreadErrToken) {
-      await streamWriter.ready;
-      await streamWriter.write(unreadErrToken);
+      streamWriter.write(unreadErrToken);
       return null;
     }
 
@@ -902,8 +885,7 @@ async function lexOpeningTagAttribute(pullChar, unreadChar, streamWriter) {
         pullChar,
         unreadChar
       );
-      await streamWriter.ready;
-      await streamWriter.write(token);
+      streamWriter.write(token);
       return null;
     } else if (
       isLegalUnquotedAttributeValueChar(quoteOrAttributeValueCharCode)
@@ -912,8 +894,7 @@ async function lexOpeningTagAttribute(pullChar, unreadChar, streamWriter) {
         pullChar,
         unreadChar
       );
-      await streamWriter.ready;
-      await streamWriter.write(token);
+      streamWriter.write(token);
       return null;
     }
   } else {
@@ -921,8 +902,7 @@ async function lexOpeningTagAttribute(pullChar, unreadChar, streamWriter) {
     // so we'll transition back to lexing the opening tag contents.
     const unreadErrToken = unreadChar();
     if (unreadErrToken) {
-      await streamWriter.ready;
-      await streamWriter.write(unreadErrToken);
+      streamWriter.write(unreadErrToken);
       return null;
     }
   }
@@ -1145,8 +1125,7 @@ async function lexClosingTagName(pullChar, unreadChar, streamWriter) {
     } = await pullChar();
 
     if (terminatorToken) {
-      await streamWriter.ready;
-      await streamWriter.write(terminatorToken);
+      streamWriter.write(terminatorToken);
       return null;
     }
 
@@ -1158,13 +1137,11 @@ async function lexClosingTagName(pullChar, unreadChar, streamWriter) {
     if (!isLegalTagNameChar(nextCharCode)) {
       const unreadErrToken = unreadChar();
       if (unreadErrToken) {
-        await streamWriter.ready;
-        await streamWriter.write(unreadErrToken);
+        streamWriter.write(unreadErrToken);
         return null;
       }
 
-      await streamWriter.ready;
-      await streamWriter.write({
+      streamWriter.write({
         type: LexerTokenType.CLOSING_TAGNAME,
         value: String.fromCodePoint(...tagnameCodePointStr),
         l: startLine,
@@ -1200,8 +1177,7 @@ async function lexClosingTagEnd(pullChar, unreadChar, streamWriter) {
       terminatorToken,
     } = await pullChar();
     if (terminatorToken) {
-      await streamWriter.ready;
-      await streamWriter.write(terminatorToken);
+      streamWriter.write(terminatorToken);
       return null;
     }
 
@@ -1249,8 +1225,7 @@ async function lexCommentTag(pullChar, unreadChar, streamWriter) {
     } = await pullChar();
 
     if (terminatorToken) {
-      await streamWriter.ready;
-      await streamWriter.write(terminatorToken);
+      streamWriter.write(terminatorToken);
       return null;
     }
 
@@ -1269,8 +1244,7 @@ async function lexCommentTag(pullChar, unreadChar, streamWriter) {
     ) {
       commentContentCodePointStr.length -= 2;
 
-      await streamWriter.ready;
-      await streamWriter.write({
+      streamWriter.write({
         type: LexerTokenType.COMMENT,
         value: String.fromCodePoint(...commentContentCodePointStr).trim(),
         l: startLine,
@@ -1333,8 +1307,7 @@ async function lexRawElementContent(
     } = await pullChar();
 
     if (terminatorToken) {
-      await streamWriter.ready;
-      await streamWriter.write(terminatorToken);
+      streamWriter.write(terminatorToken);
       return null;
     }
 
@@ -1370,22 +1343,19 @@ async function lexRawElementContent(
     ) {
       const unreadErrToken = unreadChar();
       if (unreadErrToken) {
-        await streamWriter.ready;
-        await streamWriter.write(unreadErrToken);
+        streamWriter.write(unreadErrToken);
         return null;
       }
 
       const closingTagnameMatchStringLength = closingTagnameMatchString.length;
       rawContentCharCodes.length -= closingTagnameMatchStringLength;
-      await streamWriter.ready;
-      await streamWriter.write({
+      streamWriter.write({
         type: LexerTokenType.TEXT_CONTENT,
         value: String.fromCodePoint(...rawContentCharCodes),
         l: startLine,
         c: startColumn,
       });
-      await streamWriter.ready;
-      await streamWriter.write({
+      streamWriter.write({
         type: LexerTokenType.CLOSING_TAGNAME,
         value: elementTagName,
         l: nextLine,
@@ -1422,14 +1392,12 @@ async function lexDoctypeDeclaration(
     const { ch: nextCharCode, terminatorToken } = await pullChar();
 
     if (terminatorToken) {
-      await streamWriter.ready;
-      await streamWriter.write(terminatorToken);
+      streamWriter.write(terminatorToken);
       return null;
     }
 
     if (nextCharCode === CLOSING_ANGLE_BRACKET) {
-      await streamWriter.ready;
-      await streamWriter.write({
+      streamWriter.write({
         type: LexerTokenType.DOCTYPE_DECLARATION,
         value: String.fromCodePoint(...declarationValuesCodePointString).trim(),
         l: startLine,

@@ -44,7 +44,7 @@ async function parseChildNodes(
         return null;
       }
       case LexerTokenType.ERROR: {
-        await parentChildStreamWriter.abort(
+        parentChildStreamWriter.abort(
           new Error(
             `Tempeh parsing error: ${token.value} at ${
               lexerParams.filePath ? `${lexerParams.filePath}:` : ""
@@ -67,8 +67,7 @@ async function parseChildNodes(
           c: token.c,
         };
 
-        await parentChildStreamWriter.ready;
-        await parentChildStreamWriter.write(textNode);
+        parentChildStreamWriter.write(textNode);
         break;
       }
       case LexerTokenType.OPENING_TAGNAME: {
@@ -96,8 +95,7 @@ async function parseChildNodes(
 
           switch (openingTagToken.type) {
             case LexerTokenType.SELF_CLOSING_TAG_END:
-              await parentChildStreamWriter.ready;
-              await parentChildStreamWriter.write(elementNode);
+              parentChildStreamWriter.write(elementNode);
               isElementClosed = true;
               break;
             case LexerTokenType.ATTRIBUTE_NAME: {
@@ -114,7 +112,7 @@ async function parseChildNodes(
               if (lastAttribute) {
                 lastAttribute.value = openingTagToken.value;
               } else {
-                await parentChildStreamWriter.abort(
+                parentChildStreamWriter.abort(
                   new Error(
                     `Tempeh parsing error: Encountered unexpected attribute value at ${
                       lexerParams.filePath ? `${lexerParams.filePath}:` : ""
@@ -129,8 +127,7 @@ async function parseChildNodes(
               const { readable, writable } = new TransformStream();
               elementNode.childStream = readable;
 
-              await parentChildStreamWriter.ready;
-              await parentChildStreamWriter.write(elementNode);
+              parentChildStreamWriter.write(elementNode);
 
               const childStreamWriter = writable.getWriter();
               const closingTagName = await parseChildNodes(
@@ -138,7 +135,7 @@ async function parseChildNodes(
                 lexerTokenReader,
                 childStreamWriter
               );
-              await childStreamWriter.close();
+              childStreamWriter.close();
 
               isElementClosed = true;
 
@@ -151,7 +148,7 @@ async function parseChildNodes(
               return null;
             }
             case LexerTokenType.ERROR: {
-              await parentChildStreamWriter.abort(
+              parentChildStreamWriter.abort(
                 new Error(
                   `Tempeh parsing error: ${token.value} at ${
                     lexerParams.filePath ? `${lexerParams.filePath}:` : ""
@@ -165,7 +162,7 @@ async function parseChildNodes(
                 Object.entries(LexerTokenType).find(
                   ([key, value]) => value === openingTagToken.type
                 )?.[0] ?? `UNKNOWN:${openingTagToken.type}`;
-              await parentChildStreamWriter.abort(
+              parentChildStreamWriter.abort(
                 new Error(
                   `Tempeh parsing error: Encountered unexpected token type ${tokenTypeDisplayName} at ${
                     lexerParams.filePath ? `${lexerParams.filePath}:` : ""
@@ -181,8 +178,7 @@ async function parseChildNodes(
         return token.value;
       }
       case LexerTokenType.DOCTYPE_DECLARATION: {
-        await parentChildStreamWriter.ready;
-        await parentChildStreamWriter.write(
+        parentChildStreamWriter.write(
           /** @satisfies {TmphDoctypeDeclarationNode} */ {
             doctypeDeclaration: token.value,
             l: token.l,
@@ -192,8 +188,7 @@ async function parseChildNodes(
         break;
       }
       case LexerTokenType.COMMENT: {
-        await parentChildStreamWriter.ready;
-        await parentChildStreamWriter.write(
+        parentChildStreamWriter.write(
           /** @satisfies {TmphCommentNode} */ {
             comment: token.value,
             l: token.l,
@@ -207,7 +202,7 @@ async function parseChildNodes(
           Object.entries(LexerTokenType).find(
             ([key, value]) => value === token.type
           )?.[0] ?? `UNKNOWN:${token.type}`;
-        await parentChildStreamWriter.abort(
+        parentChildStreamWriter.abort(
           new Error(
             `Tempeh parsing error: Encountered unexpected token type ${tokenTypeDisplayName} at ${
               lexerParams.filePath ? `${lexerParams.filePath}:` : ""
