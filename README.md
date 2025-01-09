@@ -73,6 +73,10 @@ const parsedNodes = await parseResult.toArray();
 #### Async Iterator
 
 An `HTMLParseResult` instance can also be used as an async iterator to process parsed nodes as they stream in.
+A streamed node will be over type `StreamedTmphNode`. This is notable because element nodes will be of type
+`StreamedTmphElementNode` which will have a `childStream` to allow further streaming child nodes as opposed to a
+final baked `children` array. This provides the ability to recursively process nodes at all levels of the tree
+as they stream in.
 
 ```ts
 const parser = new HTMLParser();
@@ -80,6 +84,12 @@ const parseResult = parser.parseFile("my-file.html");
 
 for await (const node of parseResult) {
   // process node here
+
+  if("childStream" in node) {
+    for await (const childNode of node.childStream) {
+      // process nested child nodes here
+    }
+  }
 }
 ```
 
@@ -178,4 +188,34 @@ returned by the parser.
 
 ```ts
 TmphElementNode | TmphTextNode | TmphDoctypeDeclarationNode
+```
+
+### `StreamedTmphElementNode`
+
+Parsed representation of an HTML element node, but with a `ReadableStream` for recursively streaming
+child nodes of the element as opposed to a fully baked `children` array.
+
+```ts
+{
+ // The tag name for the parsed HTML element.
+  tagName: boolean;
+  // Array of attributes on the parsed HTML element, if any were found.
+  attributes?: TmphElementAttribute[];
+  // ReadableStream for streaming child nodes of the HTML element.
+  childStream?: ReadableStream<StreamedTmphNode>;
+  // Line number where this node was found in the source HTML.
+  l: number;
+  // Column number where this node was found in the source HTML.
+  c: number;
+}
+```
+
+
+### `StreamedTmphNode`
+
+Type representing all possible types of top-level nodes which can be returned when
+streaming nodes via an async iterator.
+
+```ts
+StreamedTmphElementNode | TmphTextNode | TmphDoctypeDeclarationNode | TmphCommentNode
 ```
