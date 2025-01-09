@@ -60,6 +60,26 @@
  */
 
 /**
+ * @typedef {"upper" | "lower" | "preserve"} TagNameCasingMode
+ */
+
+/**
+ * @typedef {{
+ *  filePath: string;
+ *  rawHTMLString?: never;
+ * } | {
+ *  filePath?: never;
+ *  rawHTMLString: string;
+ * }} HTMLParserSource
+ */
+
+/**
+ * @typedef HTMLParserOptions
+ * @property {TagNameCasingMode} tagNameCasing - The mode to use for transforming the casing of parsed element tag names.
+ * @property {boolean} ignoreSelfClosingSyntax - Whether to ignore self-closing `/>` syntax on non-void elements, matching how the official HTML spec behaves (ie, `<div />` will be treated as an open div which subsequent contents will be a child of.
+ */
+
+/**
  * Export empty object so the typedefs will be exported
  */
 export {};

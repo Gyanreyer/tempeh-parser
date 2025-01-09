@@ -25,6 +25,7 @@ import {
 /**
  * @import { WritableStreamDefaultWriter } from 'node:stream/web';
  * @import { FileHandle } from 'node:fs/promises';
+ * @import { HTMLParserOptions, HTMLParserSource } from './types.js';
  */
 
 /**
@@ -39,11 +40,12 @@ export const LexerTokenType = Object.freeze({
   OPENING_TAGNAME: 3,
   CLOSING_TAGNAME: 4,
   OPENING_TAG_END: 5,
-  SELF_CLOSING_TAG_END: 6,
-  ATTRIBUTE_NAME: 7,
-  ATTRIBUTE_VALUE: 8,
-  COMMENT: 9,
-  DOCTYPE_DECLARATION: 10,
+  VOID_TAG_END: 6,
+  SELF_CLOSING_TAG_END: 7,
+  ATTRIBUTE_NAME: 8,
+  ATTRIBUTE_VALUE: 9,
+  COMMENT: 10,
+  DOCTYPE_DECLARATION: 11,
 });
 
 /**
@@ -99,15 +101,12 @@ const BUFFER_CHUNK_SIZE = 256;
 
 /**
  * @param {{
- *    writableStream: WritableStream<LexerToken>;
- * } &
- *  ({
- *  filePath: string;
- * } | {
- *  rawHTMLString: string;
- * })} options
+ *  writableStream: WritableStream<LexerToken>;
+ *  options: HTMLParserOptions;
+ *  source: HTMLParserSource;
+ * }} params
  */
-export async function lex({ writableStream, ...options }) {
+export async function lex({ writableStream, options, source }) {
   // IIFE drives the lexer state machine and writes to the transform stream
   // until the input is exhausted or an error occurs.
   const streamWriter = writableStream.getWriter();
@@ -139,9 +138,9 @@ export async function lex({ writableStream, ...options }) {
    */
   let readableByteCount;
 
-  if ("rawHTMLString" in options) {
+  if ("rawHTMLString" in source) {
     const utf8Encoder = new TextEncoder();
-    const utf8Bytes = utf8Encoder.encode(options.rawHTMLString);
+    const utf8Bytes = utf8Encoder.encode(source.rawHTMLString);
     charChunkBufferView = new DataView(utf8Bytes.buffer);
     readableByteCount = utf8Bytes.byteLength;
   } else {
@@ -438,8 +437,8 @@ export async function lex({ writableStream, ...options }) {
   let nextStateFunction = lexTextContent;
 
   try {
-    if ("filePath" in options) {
-      fileHandle = await open(options.filePath, "r");
+    if ("filePath" in source) {
+      fileHandle = await open(source.filePath, "r");
 
       const initialReadResult = await fileHandle.read(charChunkBufferView);
       readableByteCount = initialReadResult.bytesRead;
@@ -504,9 +503,10 @@ export async function lex({ writableStream, ...options }) {
 
     while (nextStateFunction) {
       nextStateFunction = await nextStateFunction(
+        streamWriter,
         pullChar,
         unreadChar,
-        streamWriter
+        options
       );
     }
     await streamWriter.close();
@@ -523,11 +523,13 @@ export async function lex({ writableStream, ...options }) {
 
 /**
  * @template {keyof typeof LexerTokenType} T
- * @template {LexerStateFunction<any,any>|null} TNextStateFunction
+ * @template {LexerStateFunction<any,any,any>|null} TNextStateFunction
+ * @template {HTMLParserOptions} [TOptions=HTMLParserOptions]
  * @typedef {(
+ *  streamWriter: WritableStreamDefaultWriter<LexerToken<T>>,
  *  pullChar: PullCharFn,
  *  unreadChar: UnreadCharFn,
- *  streamWriter: WritableStreamDefaultWriter<LexerToken<T>>
+ *  options: TOptions,
  * ) => Promise<TNextStateFunction | null>} LexerStateFunction
  */
 
@@ -543,7 +545,7 @@ export async function lex({ writableStream, ...options }) {
  *  | typeof lexTextContent
  *  >}
  */
-async function lexTextContent(pullChar, unreadChar, streamWriter) {
+async function lexTextContent(streamWriter, pullChar, unreadChar) {
   /**
    * @type {number|undefined}
    */
@@ -697,7 +699,7 @@ async function lexTextContent(pullChar, unreadChar, streamWriter) {
  * @param {UnreadCharFn} unreadChar
  * @return {Promise<LexerToken<"OPENING_TAGNAME"|"EOF"|"ERROR">>}
  */
-async function lexOpeningTagName(pullChar, unreadChar) {
+async function readOpeningTagName(pullChar, unreadChar) {
   /**
    * @type {number[]}
    */
@@ -753,21 +755,26 @@ async function lexOpeningTagName(pullChar, unreadChar) {
  *   typeof lexTextContent | typeof lexClosingTagEnd
  * >}
  */
-async function lexOpeningTagContents(pullChar, unreadChar, streamWriter) {
+async function lexOpeningTagContents(
+  streamWriter,
+  pullChar,
+  unreadChar,
+  options
+) {
   /**
    * @type {number|null}
    */
   let prevCharCode = null;
 
-  const openingTagNameToken = await lexOpeningTagName(pullChar, unreadChar);
+  const openingTagNameToken = await readOpeningTagName(pullChar, unreadChar);
   streamWriter.write(openingTagNameToken);
 
   if (openingTagNameToken.type !== LexerTokenType.OPENING_TAGNAME) {
     return null;
   }
 
-  const tagname = openingTagNameToken.value;
-  const isVoidTag = isVoidElementTagname(tagname);
+  const tagName = openingTagNameToken.value;
+  const isVoidTag = isVoidElementTagname(tagName);
 
   // Start a loop to lex attributes until we hit the end of the tag
   while (true) {
@@ -788,7 +795,10 @@ async function lexOpeningTagContents(pullChar, unreadChar, streamWriter) {
       if (nextCharCode === CLOSING_ANGLE_BRACKET) {
         // If this is a void tag or the tag was terminated with "/>", consider it a
         // self-closing tag with no content.
-        if (isVoidTag || prevCharCode === FWD_SLASH) {
+        if (
+          isVoidTag ||
+          (!options.ignoreSelfClosingSyntax && prevCharCode === FWD_SLASH)
+        ) {
           streamWriter.write({
             type: LexerTokenType.SELF_CLOSING_TAG_END,
             l: nextLine,
@@ -806,13 +816,11 @@ async function lexOpeningTagContents(pullChar, unreadChar, streamWriter) {
 
         // If this is a raw text content element,
         // we need to read the raw content inside the element.
-        if (isRawTextContentElementTagname(tagname)) {
-          return lexRawElementContent(
-            pullChar,
-            unreadChar,
-            streamWriter,
-            tagname
-          );
+        if (isRawTextContentElementTagname(tagName)) {
+          return lexRawElementContent(streamWriter, pullChar, unreadChar, {
+            ...options,
+            tagName,
+          });
         }
 
         // This is just the end of the opening tag, we don't have any tokens to emit.
@@ -828,7 +836,12 @@ async function lexOpeningTagContents(pullChar, unreadChar, streamWriter) {
 
         // Lex the attribute name and value. lexOpeningTagAttribute doesn't handle state transitions,
         // so we'll just yield the tokens it emits until it's done.
-        await lexOpeningTagAttribute(pullChar, unreadChar, streamWriter);
+        await lexOpeningTagAttribute(
+          streamWriter,
+          pullChar,
+          unreadChar,
+          options
+        );
       }
     }
 
@@ -839,8 +852,8 @@ async function lexOpeningTagContents(pullChar, unreadChar, streamWriter) {
 /**
  * @type {LexerStateFunction<"ATTRIBUTE_NAME" | "ATTRIBUTE_VALUE" | "EOF" | "ERROR", null>}
  */
-async function lexOpeningTagAttribute(pullChar, unreadChar, streamWriter) {
-  const attributeNameToken = await parseOpeningTagAttributeName(
+async function lexOpeningTagAttribute(streamWriter, pullChar, unreadChar) {
+  const attributeNameToken = await readOpeningTagAttributeName(
     pullChar,
     unreadChar
   );
@@ -881,7 +894,7 @@ async function lexOpeningTagAttribute(pullChar, unreadChar, streamWriter) {
     }
 
     if (isAttributeValueQuoteChar(quoteOrAttributeValueCharCode)) {
-      const token = await lexOpeningTagQuotedAttributeValue(
+      const token = await readOpeningTagQuotedAttributeValue(
         pullChar,
         unreadChar
       );
@@ -890,7 +903,7 @@ async function lexOpeningTagAttribute(pullChar, unreadChar, streamWriter) {
     } else if (
       isLegalUnquotedAttributeValueChar(quoteOrAttributeValueCharCode)
     ) {
-      const token = await lexOpeningTagUnquotedAttributeValue(
+      const token = await readOpeningTagUnquotedAttributeValue(
         pullChar,
         unreadChar
       );
@@ -916,7 +929,7 @@ async function lexOpeningTagAttribute(pullChar, unreadChar, streamWriter) {
  * @param {UnreadCharFn} unreadChar
  * @returns {Promise<LexerToken<"ATTRIBUTE_NAME" | "EOF" | "ERROR">>}
  */
-async function parseOpeningTagAttributeName(pullChar, unreadChar) {
+async function readOpeningTagAttributeName(pullChar, unreadChar) {
   /**
    * @type {number[]}
    */
@@ -973,7 +986,7 @@ async function parseOpeningTagAttributeName(pullChar, unreadChar) {
  * @param {UnreadCharFn} unreadChar
  * @returns {Promise<LexerToken<"ATTRIBUTE_VALUE" | "EOF" | "ERROR">>}
  */
-async function lexOpeningTagQuotedAttributeValue(pullChar, unreadChar) {
+async function readOpeningTagQuotedAttributeValue(pullChar, unreadChar) {
   /**
    * @type {number[]}
    */
@@ -1045,7 +1058,7 @@ async function lexOpeningTagQuotedAttributeValue(pullChar, unreadChar) {
  * @param {UnreadCharFn} unreadChar
  * @returns {Promise<LexerToken<"ATTRIBUTE_VALUE" | "EOF" | "ERROR">>}
  */
-async function lexOpeningTagUnquotedAttributeValue(pullChar, unreadChar) {
+async function readOpeningTagUnquotedAttributeValue(pullChar, unreadChar) {
   /**
    * @type {number[]}
    */
@@ -1101,7 +1114,7 @@ async function lexOpeningTagUnquotedAttributeValue(pullChar, unreadChar) {
  *  typeof lexClosingTagEnd
  * >}
  */
-async function lexClosingTagName(pullChar, unreadChar, streamWriter) {
+async function lexClosingTagName(streamWriter, pullChar, unreadChar) {
   /**
    * @type {number[]}
    */
@@ -1159,7 +1172,7 @@ async function lexClosingTagName(pullChar, unreadChar, streamWriter) {
  * the closing ">" is encountered.
  * @type {LexerStateFunction<"EOF"|"ERROR", typeof lexTextContent>}
  */
-async function lexClosingTagEnd(pullChar, unreadChar, streamWriter) {
+async function lexClosingTagEnd(streamWriter, pullChar) {
   /**
    * @type {number|undefined}
    */
@@ -1201,7 +1214,7 @@ async function lexClosingTagEnd(pullChar, unreadChar, streamWriter) {
  *  typeof lexTextContent
  * >}
  */
-async function lexCommentTag(pullChar, unreadChar, streamWriter) {
+async function lexCommentTag(streamWriter, pullChar) {
   /**
    * @type {number|undefined}
    */
@@ -1260,17 +1273,18 @@ async function lexCommentTag(pullChar, unreadChar, streamWriter) {
 /**
  * Read the raw contents of a script or style tag until the closing tag is encountered.
  *
- * @param {PullCharFn} pullChar
- * @param {UnreadCharFn} unreadChar
- * @param {WritableStreamDefaultWriter<LexerToken<"EOF"|"ERROR"|"TEXT_CONTENT"|"CLOSING_TAGNAME">>} streamWriter
- * @param {string} elementTagName
- * @returns {Promise<typeof lexClosingTagEnd | null>}
+ * @type {LexerStateFunction<
+ *  "EOF"|"ERROR"|"TEXT_CONTENT"|"CLOSING_TAGNAME",
+ *  typeof lexClosingTagEnd,
+ *  HTMLParserOptions & {
+ *    tagName: string;
+ *  }>}
  */
 async function lexRawElementContent(
+  streamWriter,
   pullChar,
   unreadChar,
-  streamWriter,
-  elementTagName
+  options
 ) {
   /**
    * @type {number|null}
@@ -1286,10 +1300,10 @@ async function lexRawElementContent(
    */
   const rawContentCharCodes = [];
 
-  const closingTagnameMatchString = `</${elementTagName}`;
+  const closingTagnameMatchString = `</${options.tagName}`;
 
-  const isScript = elementTagName === "script";
-  const isStyle = elementTagName === "style";
+  const isScript = options.tagName === "script";
+  const isStyle = options.tagName === "style";
 
   /**
    * @type {number | null}
@@ -1357,7 +1371,7 @@ async function lexRawElementContent(
       });
       streamWriter.write({
         type: LexerTokenType.CLOSING_TAGNAME,
-        value: elementTagName,
+        value: options.tagName,
         l: nextLine,
         c: nextCol - closingTagnameMatchStringLength,
       });

@@ -231,7 +231,9 @@ describe("HTMLParser.parseFile", () => {
 
   test("should parse a component file with inline sub-components", async () => {
     const templateSourceFilePath = `${fixturesDirPath}inlineSubComponents.tmph.html`;
-    const parsedTemplateNodes = await new HTMLParser()
+    const parsedTemplateNodes = await new HTMLParser({
+      tagNameCasing: "preserve",
+    })
       .parseFile(templateSourceFilePath)
       .toArray();
 

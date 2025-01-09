@@ -1,8 +1,7 @@
 import parseTemplate from "./parseTemplate.js";
 
 /**
- * @import { StreamedTmphNode, TmphNode } from './types.js';
- * @import { ParseTemplateParams } from './parseTemplate.js';
+ * @import { HTMLParserOptions, HTMLParserSource, StreamedTmphNode, TmphNode } from './types.js';
  */
 
 export class HTMLParseResult {
@@ -16,15 +15,16 @@ export class HTMLParseResult {
   }
 
   /**
-   * @param {ParseTemplateParams} params
+   * @param {HTMLParserSource} source
+   * @param {HTMLParserOptions} options
    */
-  constructor(params) {
+  constructor(source, options) {
     /**
      * @type {TransformStream<StreamedTmphNode, StreamedTmphNode>}
      */
     const rootNodeStream = new TransformStream();
     this.#readableStream = rootNodeStream.readable;
-    parseTemplate(params, rootNodeStream.writable);
+    parseTemplate(source, options, rootNodeStream.writable);
   }
 
   async *[Symbol.asyncIterator]() {
@@ -81,6 +81,21 @@ export class HTMLParseResult {
 
 export class HTMLParser {
   /**
+   * @type {HTMLParserOptions}
+   */
+  options;
+
+  /**
+   * @param {Partial<HTMLParserOptions>} options
+   */
+  constructor(options = {}) {
+    this.options = {
+      tagNameCasing: options.tagNameCasing ?? "lower",
+      ignoreSelfClosingSyntax: options.ignoreSelfClosingSyntax ?? false,
+    };
+  }
+
+  /**
    * Takes the path to an HTML file and parses it into a JSON representation.
    *
    * @param {string} filePath
@@ -94,7 +109,12 @@ export class HTMLParser {
    * }
    */
   parseFile(filePath) {
-    return new HTMLParseResult({ filePath });
+    return new HTMLParseResult(
+      {
+        filePath,
+      },
+      this.options
+    );
   }
 
   /**
@@ -110,6 +130,11 @@ export class HTMLParser {
    * }
    */
   parseString(rawHTMLString) {
-    return new HTMLParseResult({ rawHTMLString });
+    return new HTMLParseResult(
+      {
+        rawHTMLString,
+      },
+      this.options
+    );
   }
 }

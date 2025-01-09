@@ -3,18 +3,8 @@ import { LexerTokenType } from "./lexer.js";
 import Piscina from "piscina";
 
 /**
- * @import { StreamedTmphElementNode, TmphTextNode, TmphDoctypeDeclarationNode, TmphCommentNode, StreamedTmphNode } from "./types.js";
- * @import {LexerToken} from './lexer.js';
- */
-
-/**
- * @typedef {({
- *  filePath: string;
- *  rawHTMLString?: never;
- * } | {
- *  rawHTMLString: string;
- *  filePath?: never;
- * })} ParseTemplateParams
+ * @import { StreamedTmphElementNode, TmphTextNode, StreamedTmphNode, HTMLParserOptions, HTMLParserSource } from "./types.js";
+ * @import { LexerToken } from './lexer.js';
  */
 
 const pool = new Piscina({
@@ -23,15 +13,19 @@ const pool = new Piscina({
 });
 
 /**
- * @param {ParseTemplateParams} lexerParams
+ * @param {HTMLParserSource} source
+ * @param {HTMLParserOptions} parserOptions
  * @param {ReadableStreamDefaultReader<LexerToken>} lexerTokenReader
  * @param {WritableStreamDefaultWriter<StreamedTmphNode>} parentChildStreamWriter - The parent node of the child nodes being parsed, or null if the child nodes are root-level.
+ * @param {string[]} [ parentTagNames ]
  * @returns {Promise<null | string>} Final return value is the tag name of an encountered closing tag, or null if the tag is self-closing.
  */
 async function parseChildNodes(
-  lexerParams,
+  source,
+  parserOptions,
   lexerTokenReader,
-  parentChildStreamWriter
+  parentChildStreamWriter,
+  parentTagNames = []
 ) {
   /**
    * @type {ReadableStreamReadResult<LexerToken>}
@@ -47,7 +41,7 @@ async function parseChildNodes(
         parentChildStreamWriter.abort(
           new Error(
             `Tempeh parsing error: ${token.value} at ${
-              lexerParams.filePath ? `${lexerParams.filePath}:` : ""
+              source.filePath ? `${source.filePath}:` : ""
             }${token.l}:${token.c}`
           )
         );
@@ -71,7 +65,16 @@ async function parseChildNodes(
         break;
       }
       case LexerTokenType.OPENING_TAGNAME: {
-        const tagName = token.value;
+        let tagName = token.value;
+        switch (parserOptions.tagNameCasing) {
+          case "lower":
+            tagName = tagName.toLowerCase();
+            break;
+          case "upper":
+            tagName = tagName.toUpperCase();
+            break;
+          default:
+        }
 
         /**
          * @type {StreamedTmphElementNode}
@@ -114,9 +117,11 @@ async function parseChildNodes(
               } else {
                 parentChildStreamWriter.abort(
                   new Error(
-                    `Tempeh parsing error: Encountered unexpected attribute value at ${
-                      lexerParams.filePath ? `${lexerParams.filePath}:` : ""
-                    }${openingTagToken.l}:${openingTagToken.c}`
+                    `Tempeh parsing error: Encountered unexpected attribute value ${
+                      openingTagToken.value
+                    } at ${source.filePath ? `${source.filePath}:` : ""}${
+                      openingTagToken.l
+                    }:${openingTagToken.c}`
                   )
                 );
                 return null;
@@ -131,9 +136,11 @@ async function parseChildNodes(
 
               const childStreamWriter = writable.getWriter();
               const closingTagName = await parseChildNodes(
-                lexerParams,
+                source,
+                parserOptions,
                 lexerTokenReader,
-                childStreamWriter
+                childStreamWriter,
+                parentTagNames.concat(tagName)
               );
               childStreamWriter.close();
 
@@ -151,7 +158,7 @@ async function parseChildNodes(
               parentChildStreamWriter.abort(
                 new Error(
                   `Tempeh parsing error: ${token.value} at ${
-                    lexerParams.filePath ? `${lexerParams.filePath}:` : ""
+                    source.filePath ? `${source.filePath}:` : ""
                   }${token.l}:${token.c}`
                 )
               );
@@ -165,7 +172,7 @@ async function parseChildNodes(
               parentChildStreamWriter.abort(
                 new Error(
                   `Tempeh parsing error: Encountered unexpected token type ${tokenTypeDisplayName} at ${
-                    lexerParams.filePath ? `${lexerParams.filePath}:` : ""
+                    source.filePath ? `${source.filePath}:` : ""
                   }${openingTagToken.l}:${openingTagToken.c}`
                 )
               );
@@ -175,7 +182,29 @@ async function parseChildNodes(
         break;
       }
       case LexerTokenType.CLOSING_TAGNAME: {
-        return token.value;
+        let closingTagName = token.value;
+        switch (parserOptions.tagNameCasing) {
+          case "lower":
+            closingTagName = closingTagName.toLowerCase();
+            break;
+          case "upper":
+            closingTagName = closingTagName.toUpperCase();
+            break;
+          default:
+        }
+
+        for (let i = parentTagNames.length - 1; i >= 0; --i) {
+          if (parentTagNames[i] === closingTagName) {
+            // If the closing tag matches a parent tag name,
+            // we should stop parsing child nodes and break out of this loop.
+            // Return with the closing tag name so the parent
+            // context can handle things further.
+            return closingTagName;
+          }
+        }
+
+        // If the closing tag doesn't match any parent tag names, ignore it
+        break;
       }
       case LexerTokenType.DOCTYPE_DECLARATION: {
         parentChildStreamWriter.write(
@@ -205,7 +234,7 @@ async function parseChildNodes(
         parentChildStreamWriter.abort(
           new Error(
             `Tempeh parsing error: Encountered unexpected token type ${tokenTypeDisplayName} at ${
-              lexerParams.filePath ? `${lexerParams.filePath}:` : ""
+              source.filePath ? `${source.filePath}:` : ""
             }${token.l}:${token.c}`
           )
         );
@@ -220,16 +249,17 @@ async function parseChildNodes(
 /**
  * Takes the path to a .tmph.html file and parses it into a JSON object
  * that can be used by the compiler.
- * @param {ParseTemplateParams} lexerParams
+ * @param {HTMLParserSource} source
+ * @param {HTMLParserOptions} options
  * @param {WritableStream<StreamedTmphNode>} rootNodeStream
  */
-export default async function parseTemplate(lexerParams, rootNodeStream) {
+export default async function parseTemplate(source, options, rootNodeStream) {
   /**
    * @type {TransformStream<LexerToken>}
    */
   const lexerTokenTransformStream = new TransformStream();
   const runPromise = pool.run(
-    { ...lexerParams, writableStream: lexerTokenTransformStream.writable },
+    { source, options, writableStream: lexerTokenTransformStream.writable },
     {
       // @ts-ignore
       transferList: [lexerTokenTransformStream.writable],
@@ -240,7 +270,8 @@ export default async function parseTemplate(lexerParams, rootNodeStream) {
 
   try {
     await parseChildNodes(
-      lexerParams,
+      source,
+      options,
       lexerTokenTransformStream.readable.getReader(),
       rootNodeStreamWriter
     );
