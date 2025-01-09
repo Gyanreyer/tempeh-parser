@@ -231,7 +231,9 @@ describe("HTMLParser.parseFile", () => {
 
   test("should parse a component file with inline sub-components", async () => {
     const templateSourceFilePath = `${fixturesDirPath}inlineSubComponents.tmph.html`;
-    const parsedTemplateNodes = await new HTMLParser()
+    const parsedTemplateNodes = await new HTMLParser({
+      tagNameCasing: "preserve",
+    })
       .parseFile(templateSourceFilePath)
       .toArray();
 
@@ -281,8 +283,18 @@ describe("HTMLParser.parseFile", () => {
           c: 2,
         },
         {
-          textContent: "\n\n",
+          textContent: "\n",
           l: 4,
+          c: 1,
+        },
+        {
+          comment: "This comment should be skipped",
+          l: 4,
+          c: 5,
+        },
+        {
+          textContent: "\n",
+          l: 5,
           c: 1,
         },
         {
@@ -989,6 +1001,11 @@ describe("HTMLParser.parseFile", () => {
     assert.deepStrictEqual(
       parsedTemplateNodes,
       /** @satisfies {TmphNode[]} */ ([
+        {
+          comment: "This should be parsed as a single text snippet",
+          l: 1,
+          c: 5,
+        },
         {
           textContent: "\nCheck this out: ",
           l: 2,

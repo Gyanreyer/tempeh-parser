@@ -39,7 +39,6 @@ describe("HTMLParser.parseString", () => {
 <p>This is <em>another</em> paragraph.</p>
 `;
 
-    let nodeIndex = 0;
     /**
      * @type {TmphNode[]}
      */
@@ -97,8 +96,9 @@ describe("HTMLParser.parseString", () => {
       },
     ];
 
-    for await (const node of htmlParser.parseString(htmlString)) {
-      assert.deepStrictEqual(node, expectedNodes[nodeIndex++]);
-    }
+    assert.deepStrictEqual(
+      await htmlParser.parseString(htmlString).toArray(),
+      expectedNodes
+    );
   });
 });

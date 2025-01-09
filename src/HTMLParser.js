@@ -1,40 +1,69 @@
-import { Piscina } from "piscina";
+import parseTemplate from "./parseTemplate.js";
 
 /**
- * @import { TmphNode } from './types.js';
- * @import { ParseTemplateParams } from './parseTemplate.worker.js';
+ * @import { HTMLParserOptions, HTMLParserSource, StreamedTmphNode, TmphNode } from './types.js';
  */
 
 export class HTMLParseResult {
   /**
-   * @type {AsyncGenerator<TmphNode, void, unknown> | null}
+   * @type {ReadableStream<StreamedTmphNode> | null}
    */
-  #generator;
+  #readableStream;
 
   get used() {
-    return !this.#generator;
+    return !this.#readableStream;
   }
 
   /**
-   *
-   * @param {AsyncGenerator<TmphNode, void, unknown>} generator
+   * @param {HTMLParserSource} source
+   * @param {HTMLParserOptions} options
    */
-  constructor(generator) {
-    this.#generator = generator;
+  constructor(source, options) {
+    /**
+     * @type {TransformStream<StreamedTmphNode, StreamedTmphNode>}
+     */
+    const rootNodeStream = new TransformStream();
+    this.#readableStream = rootNodeStream.readable;
+    parseTemplate(source, options, rootNodeStream.writable);
   }
 
   async *[Symbol.asyncIterator]() {
-    if (!this.#generator) {
+    if (!this.#readableStream) {
       throw new Error("HTMLParseResult instance has already been used");
     }
-    try {
-      yield* this.#generator;
-    } catch (err) {
-      // Re-throw any errors
-      throw err;
-    } finally {
-      this.#generator = null;
+    const readableStream = this.#readableStream;
+    this.#readableStream = null;
+
+    yield* readableStream;
+  }
+
+  /**
+   * @param {StreamedTmphNode} node
+   * @returns {Promise<TmphNode>}
+   */
+  async getResolvedStreamedElementNode(node) {
+    if (!("childStream" in node)) {
+      return node;
     }
+
+    const { childStream, ...rest } = node;
+
+    /**
+     * @type {TmphNode[]}
+     */
+    const children = [];
+    for await (const child of childStream) {
+      children.push(await this.getResolvedStreamedElementNode(child));
+    }
+
+    if (children.length > 0) {
+      return {
+        ...rest,
+        children,
+      };
+    }
+
+    return rest;
   }
 
   async toArray() {
@@ -43,7 +72,7 @@ export class HTMLParseResult {
      */
     const nodes = [];
     for await (const node of this) {
-      nodes.push(node);
+      nodes.push(await this.getResolvedStreamedElementNode(node));
     }
 
     return nodes;
@@ -52,51 +81,18 @@ export class HTMLParseResult {
 
 export class HTMLParser {
   /**
-   * @type {Piscina<ParseTemplateParams, void>}
+   * @type {HTMLParserOptions}
    */
-  #pool;
-
-  constructor() {
-    this.#pool = new Piscina({
-      filename: import.meta.resolve("./parseTemplate.worker.js"),
-    });
-  }
+  options;
 
   /**
-   * Takes the path to an HTML file and parses it into a JSON representation.
-   * This function is an async generator that yields root-level nodes from the parsed file as they stream in.
-   *
-   * @param {{
-   *  filePath: string;
-   *  rawHTMLString?: never;
-   * } | {
-   *  rawHTMLString: string;
-   *  filePath?: never;
-   * }} params
+   * @param {Partial<HTMLParserOptions>} options
    */
-  async *#runParser(params) {
-    /**
-     * @type {TransformStream<TmphNode | Error>}
-     */
-    const transformStream = new TransformStream();
-
-    const { readable, writable } = transformStream;
-
-    const runPromise = this.#pool.run(
-      { ...params, writableStream: writable },
-      {
-        transferList: [
-          // @ts-expect-error - WritableStream is not typed as a TransferListItem, but it can be safely transferred. Don't know what's up with that.
-          writable,
-        ],
-      }
-    );
-
-    try {
-      yield* readable;
-    } finally {
-      await runPromise;
-    }
+  constructor(options = {}) {
+    this.options = {
+      tagNameCasing: options.tagNameCasing ?? "lower",
+      ignoreSelfClosingSyntax: options.ignoreSelfClosingSyntax ?? false,
+    };
   }
 
   /**
@@ -113,7 +109,12 @@ export class HTMLParser {
    * }
    */
   parseFile(filePath) {
-    return new HTMLParseResult(this.#runParser({ filePath }));
+    return new HTMLParseResult(
+      {
+        filePath,
+      },
+      this.options
+    );
   }
 
   /**
@@ -129,6 +130,11 @@ export class HTMLParser {
    * }
    */
   parseString(rawHTMLString) {
-    return new HTMLParseResult(this.#runParser({ rawHTMLString }));
+    return new HTMLParseResult(
+      {
+        rawHTMLString,
+      },
+      this.options
+    );
   }
 }
